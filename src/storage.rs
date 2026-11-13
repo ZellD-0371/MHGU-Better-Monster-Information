@@ -203,12 +203,11 @@ pub fn poll(){
  if LOADED.load(Ordering::Acquire){return}
  let n=RETRY.fetch_add(1,Ordering::Relaxed);if n%180!=0{return}
  let mut bytes=[0;MAX_BYTES];if let Ok(text)=SETTINGS.read(&mut bytes){
-  crate::STATE.with(|s|{for line in text.lines(){let Some((key,value))=line.split_once('=') else{continue};let Ok(n)=value.trim().parse::<usize>() else{continue};match key.trim(){"diagram_mode" if n<=2&&!cfg!(bmi_low_memory)=>crate::resources::DIAGRAM_MODE.store(n as u32,Ordering::Relaxed),"diagram_trace"=>crate::resources::DIAGRAM_TRACE.store(n!=0,Ordering::Relaxed),"profile" if n<=2=>crate::perf::MODE.store(n as u32,Ordering::Relaxed),"language" if n<9=>s.language=n,"layout" if n<3=>s.layout=n,_=>{}}}});
+  crate::STATE.with(|s|{for line in text.lines(){let Some((key,value))=line.split_once('=') else{continue};let Ok(n)=value.trim().parse::<usize>() else{continue};match key.trim(){"profile" if n<=2=>crate::perf::MODE.store(n as u32,Ordering::Relaxed),"language" if n<9=>s.language=n,"layout" if n<3=>s.layout=n,_=>{}}}});
   LOADED.store(true,Ordering::Release);
  }
 }
 pub fn save_preferences()->bool{
  let text=crate::STATE.with(|s|alloc::format!("[BetterMonsterInformation]\nlanguage={}\nlayout={}\n",s.language,s.layout));
- let text=if crate::resources::DIAGRAM_MODE.load(Ordering::Relaxed)!=0||crate::resources::DIAGRAM_TRACE.load(Ordering::Relaxed){alloc::format!("{}diagram_mode={}\ndiagram_trace={}\n",text,crate::resources::DIAGRAM_MODE.load(Ordering::Relaxed),crate::resources::DIAGRAM_TRACE.load(Ordering::Relaxed) as u8)}else{text};
  SETTINGS.save(&text).is_ok()
 }

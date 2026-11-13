@@ -1,4 +1,4 @@
-use alloc::{vec,vec::Vec,ffi::CString};
+use alloc::{vec::Vec,ffi::CString};
 use core::ffi::CStr;
 use forge::{imgui::DrawList,sys::imgui::{self as sys,ImVec2,ImTextureRef}};
 use crate::generated as g;
@@ -28,61 +28,34 @@ pub fn init()->bool{unsafe{
 }}
 // Rules have identical strings in every pack; UI reads the committed language.
 pub fn text(id:u32,_lang:usize)->alloc::string::String{crate::language::text(id)}
-pub static DIAGRAM_MODE:core::sync::atomic::AtomicU32=core::sync::atomic::AtomicU32::new(if cfg!(bmi_low_memory){2}else{0});
-pub static DIAGRAM_TRACE:core::sync::atomic::AtomicBool=core::sync::atomic::AtomicBool::new(false);
-static mut TRACE:Option<alloc::string::String>=None;
-static mut LAST_STATUS:i32=-1;
-static UPDATE_ACK:core::sync::atomic::AtomicBool=core::sync::atomic::AtomicBool::new(false);
-// Renderer callbacks run after its texture request pass. NVN currently uploads
-// WantUpdates but omits SetStatus(OK). Acknowledge only at this real render point,
-// with an existing GPU texture, rather than assuming that one elapsed frame did it.
-unsafe extern "C" fn acknowledge_update(_list:*const sys::ImDrawList,cmd:*const sys::ImDrawCmd){unsafe{
- let tex=(*cmd).UserCallbackData as *mut sys::ImTextureData;
- if !tex.is_null()&&(*tex).Status==sys::ImTextureStatus::WantUpdates&&(*tex).TexID!=0&&!(*tex).BackendUserData.is_null(){
-  sys::ImTextureData_SetStatus(tex,sys::ImTextureStatus::OK);
-  UPDATE_ACK.store(true,core::sync::atomic::Ordering::Release);
- }
-}}
-
-fn stage(message:&str){
- if !DIAGRAM_TRACE.load(core::sync::atomic::Ordering::Relaxed){return}
- forge::log::prelude::info!("[monster-diagram] {}",message);
- unsafe{let trace=(&mut*core::ptr::addr_of_mut!(TRACE)).get_or_insert_with(alloc::string::String::new);if trace.len()>3500{trace.clear();}trace.push_str(message);trace.push('\n');
- let location=crate::storage::Location{path:c"savedata:/better-monster-information-diagram.log",display:"Monster diagram diagnostics",defaults:""};let _=location.save(trace);}
-}
-fn dimensions()->(usize,usize){if DIAGRAM_MODE.load(core::sync::atomic::Ordering::Relaxed)==2{(384,256)}else{(g::DIAGRAM_TEX_W,g::DIAGRAM_TEX_H)}}
+fn dimensions()->(usize,usize){if cfg!(bmi_low_memory){(384,256)}else{(g::DIAGRAM_TEX_W,g::DIAGRAM_TEX_H)}}
 pub fn load_diagram(id:u16){unsafe{
- if UPDATE_ACK.swap(false,core::sync::atomic::Ordering::AcqRel){stage("render callback acknowledged GPU update; status=OK");}
- if DIAGRAM_MODE.load(core::sync::atomic::Ordering::Relaxed)==1{return}
  if let Some((tex,_,old))=DIAGRAM{
-  let status=(*tex).Status as i32;
-  if status!=LAST_STATUS{stage(&alloc::format!("backend status={} id={} tex_id={} backend={:p}",status,old,(*tex).TexID,(*tex).BackendUserData));LAST_STATUS=status;}
+  // Recomp mirrors ImTextureData. The renderer changes the host object after
+  // this callback; refresh via its API before testing the guest Status copy.
+  let _=sys::ImTextureData_GetTexID(tex);
   if old==id||(*tex).Status!=sys::ImTextureStatus::OK{return}
  }
  let(w,h)=g::DIAGRAM_SOURCES.get(id as usize).copied().unwrap_or((0,0));if w==0{return}
- stage(&alloc::format!("begin id={} source={}x{} mode={}",id,w,h,DIAGRAM_MODE.load(core::sync::atomic::Ordering::Relaxed)));
+ 
  let path=CString::new(alloc::format!("app:/nativeNX/plugins/better-monster-information/parts/{}.rgba",id)).unwrap();
- let file=sys::igImFileOpen(path.as_ptr(),c"rb".as_ptr());if file.is_null(){stage("file open failed");return}
- if sys::igImFileGetSize(file)!=w as u64*h as u64*4{sys::igImFileClose(file);stage("file size mismatch");return}
+ let file=sys::igImFileOpen(path.as_ptr(),c"rb".as_ptr());if file.is_null(){return}
+ if sys::igImFileGetSize(file)!=w as u64*h as u64*4{sys::igImFileClose(file);return}
  let(tw,th)=dimensions();
  let(tex,reference,fresh)=if let Some((tex,reference,_))=DIAGRAM{(tex,reference,false)}else{
-  stage(&alloc::format!("allocate CPU texture bytes={} canvas={}x{} (source pixels preserved)",tw*th*4,tw,th));
-  let tex=sys::ImTextureData_ImTextureData();if tex.is_null(){sys::igImFileClose(file);stage("texture object allocation failed");return}
+  
+  let tex=sys::ImTextureData_ImTextureData();if tex.is_null(){sys::igImFileClose(file);return}
   // Use Forge's texture API: Recomp marshals host pixels into guest memory.
   // Assigning a guest allocation directly to Pixels bypasses that ownership bridge.
   sys::ImTextureData_Create(tex,sys::ImTextureFormat::RGBA32,tw as i32,th as i32);
   let pixels=sys::ImTextureData_GetPixels(tex) as *mut u8;
-  if pixels.is_null(){sys::ImTextureData_destroy(tex);sys::igImFileClose(file);stage("CPU pixels allocation failed");return}
-  let rects=sys::igMemAlloc(core::mem::size_of::<sys::ImTextureRect>()) as *mut sys::ImTextureRect;
-  if rects.is_null(){sys::ImTextureData_destroy(tex);sys::igImFileClose(file);stage("update rectangle allocation failed");return}
-  (*tex).Updates.Data=rects;(*tex).Updates.Capacity=1;(*tex).Updates.Size=0;
-  sys::ImTextureData_SetStatus(tex,sys::ImTextureStatus::WantCreate);
+  if pixels.is_null(){sys::ImTextureData_destroy(tex);sys::igImFileClose(file);return}
   (tex,sys::ImTextureData_GetTexRef(tex),true)
  };
- let pixels=sys::ImTextureData_GetPixels(tex) as *mut u8;if pixels.is_null(){sys::igImFileClose(file);stage("CPU pixel mapping failed");return}core::ptr::write_bytes(pixels,0,tw*th*4);
- let(dw,dh)=if DIAGRAM_MODE.load(core::sync::atomic::Ordering::Relaxed)==2{let scale=(tw as f32/w as f32).min(th as f32/h as f32).min(1.);(((w as f32*scale) as usize).max(1),((h as f32*scale) as usize).max(1))}else{(w as usize,h as usize)};
+ let pixels=sys::ImTextureData_GetPixels(tex) as *mut u8;if pixels.is_null(){sys::igImFileClose(file);return}core::ptr::write_bytes(pixels,0,tw*th*4);
+ let(dw,dh)=if cfg!(bmi_low_memory){let scale=(tw as f32/w as f32).min(th as f32/h as f32).min(1.);(((w as f32*scale) as usize).max(1),((h as f32*scale) as usize).max(1))}else{(w as usize,h as usize)};
  // Stream rows instead of keeping a second full RGBA image in memory.
- let mut row=alloc::vec::Vec::new();if row.try_reserve_exact(w as usize*4).is_err(){sys::igImFileClose(file);if fresh{sys::ImTextureData_destroy(tex);}stage("row allocation failed");return}row.resize(w as usize*4,0u8);
+ let mut row=alloc::vec::Vec::new();if row.try_reserve_exact(w as usize*4).is_err(){sys::igImFileClose(file);if fresh{sys::ImTextureData_destroy(tex);}return}row.resize(w as usize*4,0u8);
  let mut out_y=0;let mut ok=true;
  for sy in 0..h as usize{
   if sys::igImFileRead(row.as_mut_ptr().cast(),1,row.len() as u64,file)!=row.len() as u64{ok=false;break}
@@ -92,16 +65,13 @@ pub fn load_diagram(id:u16){unsafe{
    out_y+=1;
   }
  }
- sys::igImFileClose(file);if !ok{if fresh{sys::ImTextureData_destroy(tex);}stage("image read failed");return}
+ sys::igImFileClose(file);if !ok{if fresh{sys::ImTextureData_destroy(tex);}return}
  let rect=sys::ImTextureRect{x:0,y:0,w:tw as u16,h:th as u16};(*tex).UsedRect=rect;
- if fresh{stage("register texture for GPU creation");sys::igRegisterUserTexture(tex);}else{
-  // NVN uploads each entry in Updates; UpdateRect alone is only a flush bound.
-  (*tex).Updates.Data.write(rect);(*tex).Updates.Size=1;(*tex).UpdateRect=rect;
+ if fresh{sys::igRegisterUserTexture(tex);}else{
+  (*tex).UpdateRect=rect;
   sys::ImTextureData_SetStatus(tex,sys::ImTextureStatus::WantUpdates);
-  let draw=DrawList::foreground();if !draw.raw().is_null(){sys::ImDrawList_AddCallback(draw.raw(),Some(acknowledge_update),tex.cast(),0);}
-  stage("queued full update rectangle and render acknowledgement");
  }
- DIAGRAM=Some((tex,reference,id));LAST_STATUS=-1;stage("CPU load complete; waiting for backend");
+ DIAGRAM=Some((tex,reference,id));
 }}
 pub fn icon(draw:DrawList,id:usize,p1:ImVec2,p2:ImVec2,tint:u32,flip:bool){unsafe{
     sprite(draw,id,p1,p2,tint,flip,false);
@@ -114,5 +84,5 @@ pub fn sprite(draw:DrawList,id:usize,p1:ImVec2,p2:ImVec2,tint:u32,flip_x:bool,fl
 }}
 pub fn diagram(draw:DrawList,id:u16,p1:ImVec2,p2:ImVec2)->bool{unsafe{
     let Some((tex,reference,loaded))=DIAGRAM else{return false};if loaded!=id||(*tex).Status!=sys::ImTextureStatus::OK{return false}
-    let(w,h)=g::DIAGRAM_SOURCES[id as usize];let(tw,th)=dimensions();let scale=if DIAGRAM_MODE.load(core::sync::atomic::Ordering::Relaxed)==2{(tw as f32/w as f32).min(th as f32/h as f32).min(1.)}else{1.};draw.add_image(reference,p1,p2,ImVec2{x:0.,y:0.},ImVec2{x:(w as f32*scale) as usize as f32/tw as f32,y:(h as f32*scale) as usize as f32/th as f32},0xffffffff);true
+    let(w,h)=g::DIAGRAM_SOURCES[id as usize];let(tw,th)=dimensions();let scale=if cfg!(bmi_low_memory){(tw as f32/w as f32).min(th as f32/h as f32).min(1.)}else{1.};draw.add_image(reference,p1,p2,ImVec2{x:0.,y:0.},ImVec2{x:(w as f32*scale) as usize as f32/tw as f32,y:(h as f32*scale) as usize as f32/th as f32},0xffffffff);true
 }}
