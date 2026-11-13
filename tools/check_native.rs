@@ -1,4 +1,5 @@
 extern crate alloc;
+#[path="../src/language_pack.rs"]mod language_pack;
 #[path="../src/layout.rs"]mod layout;
 #[path="../src/data.rs"]mod data;
 #[cfg(not(bmi_low_memory))]#[path="../src/generated.rs"]mod generated;
@@ -42,3 +43,15 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
 #[test]fn monster_change_preserves_added_page_across_different_page_counts(){assert_eq!(layout::extra_page_on_monster_change(true,0,34,3,4),Some(3));assert_eq!(layout::extra_page_on_monster_change(true,34,0,2,3),Some(2));assert_eq!(layout::extra_page_on_monster_change(true,34,35,3,4),Some(3));assert_eq!(layout::extra_page_on_monster_change(false,0,34,3,4),None);assert_eq!(layout::extra_page_on_monster_change(true,34,34,3,4),None);assert_eq!(layout::extra_page_on_monster_change(true,0,34,3,3),None);}
 
 #[test]fn atlas_variant_size_and_sprite_bounds(){let p=if cfg!(bmi_low_memory){"assets/native-low/monster-icons.rgba"}else{"assets/native/monster-icons.rgba"};assert_eq!(std::fs::metadata(p).unwrap().len(),(2048*generated::ATLAS_HEIGHT*4) as u64);if cfg!(bmi_low_memory){assert!(generated::ATLAS_HEIGHT<=256);}for s in &generated::SPRITES{assert!(s.w>0&&s.h>0&&s.x as usize+s.w as usize<=2048&&s.y as usize+s.h as usize<=generated::ATLAS_HEIGHT);if cfg!(bmi_low_memory){assert!(s.w<=32&&s.h<=32);}}}
+
+#[test]fn single_language_packs_match_every_multilingual_record(){
+ let codes=["en","zh-Hans","zh-Hant","ja","ko","de","fr","it","es"];
+ for(l,code)in codes.iter().enumerate(){let bytes=std::fs::read(format!("assets/languages/text.{}.bin",code)).unwrap();let pack=language_pack::Pack::prepare(l,bytes).ok().unwrap();assert_eq!(pack.language,l);for id in 0..language_pack::COUNT as u32{assert_eq!(pack.text(id),resources::text(id,l));}}
+}
+#[test]fn language_swap_releases_old_pack_and_preserves_owned_strings(){
+ let en=std::fs::read("assets/languages/text.en.bin").unwrap();let ko=std::fs::read("assets/languages/text.ko.bin").unwrap();let mut store=language_pack::Store::default();
+ store.commit(language_pack::Pack::prepare(0,en).ok().unwrap());let text=store.active.as_ref().unwrap().text(generated::UI_NOTESINFO[0]);
+ let old=store.commit(language_pack::Pack::prepare(4,ko.clone()).ok().unwrap()).unwrap();assert_eq!(old.language,0);drop(old);assert_eq!(store.active.as_ref().unwrap().language,4);assert!(text.contains("Hunter"));
+ let mut broken=ko;broken[20]^=1;assert!(language_pack::Pack::prepare(4,broken).is_err());assert_eq!(store.active.as_ref().unwrap().language,4);assert!(language_pack::Pack::prepare(0,Vec::new()).is_err());
+}
+#[test]fn shared_subset_font_integrity(){let f=std::fs::read("assets/languages/font.shared.otf").unwrap();assert_eq!(f.len(),language_pack::FONT.0);assert_eq!(!language_pack::crc_step(!0,&f),language_pack::FONT.1);assert!(f.len()<2*1024*1024);assert_eq!(&f[..4],b"OTTO");}

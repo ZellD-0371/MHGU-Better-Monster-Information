@@ -30,3 +30,8 @@ preview-settings.json
 
 !/assets/native-low/
 !/tools/prepare_low_memory.py
+
+!/assets/languages/
+!/tools/prepare_languages.py
+
+!/conf/FORGE_LICENSE.txt

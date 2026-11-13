@@ -12,10 +12,11 @@ def main():
     target.mkdir(parents=True,exist_ok=True)
     shutil.copy2(binary,target)
     assets=target/'better-monster-information';assets.mkdir(exist_ok=True)
-    for name in ['monster-text.bin','monster-icons.rgba']:
+    for name in ['monster-icons.rgba']:
         source=ROOT/('assets/native-low' if variant=='low-memory' and name=='monster-icons.rgba' else 'assets/native')/name
         shutil.copy2(source,assets/name)
-    shutil.copy2(ROOT/'assets/NotoSansCJKkr-Regular.otf',assets/'NotoSansCJKkr-Regular.otf')
+    for obsolete in ['monster-text.bin','NotoSansCJKkr-Regular.otf']:(assets/obsolete).unlink(missing_ok=True)
+    shutil.copytree(ROOT/'assets/languages',assets/'languages',dirs_exist_ok=True)
     (assets/'NOTO_LICENSE.txt').unlink(missing_ok=True)
     shutil.copy2(ROOT/'assets/NOTO_LICENSE.txt',assets/'OFL.md')
     shutil.copy2(ROOT/'conf/FORGE_LICENSE.txt',assets/'FORGE_LICENSE.md')

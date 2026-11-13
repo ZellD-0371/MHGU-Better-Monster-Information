@@ -41,7 +41,7 @@ pub fn rank_unlocked(id:u16,rank:u8,p:&Progress)->bool{
     for level in first..=16{
         let quest=40100+monster.deviant as u32*100+level;
         let Some(&(_,text))=g::RULES.iter().find(|&&(q,_)|q==quest) else{break};
-        if !rule_open(crate::resources::text(text,0),p){break}
+        if !rule_open(&crate::resources::text(text,0),p){break}
         if level>=lo&&level<=hi{return true}
     }false
 }

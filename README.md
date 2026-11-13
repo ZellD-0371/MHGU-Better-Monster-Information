@@ -41,9 +41,10 @@ mods/
          └─ plugins/
             ├─ better_monster_information.nro
             └─ better-monster-information/
-               ├─ monster-text.bin
                ├─ monster-icons.rgba
-               ├─ NotoSansCJKkr-Regular.otf
+               ├─ languages/
+               │  ├─ text.en.bin … text.es.bin
+               │  └─ font.shared.otf
                └─ parts/
 ```
 
@@ -95,6 +96,8 @@ Automated tests do not replace in-game input and visual testing.
 
 
 ```powershell
+# Regenerate changed text/font inputs with fontTools.
+py -3.10 -X utf8 tools/prepare_languages.py
 # Generate the small atlas only when icon inputs change (requires Pillow).
 py -3.10 -X utf8 tools/prepare_low_memory.py
 ./tools/Build.ps1 -Variant low-memory

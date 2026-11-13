@@ -5,7 +5,7 @@ static mut FONT:Option<imgui::ImFont>=None;
 #[derive(Clone,Copy)]
 struct Glyph{advance:f32,top:f32,bottom:f32}
 static mut GLYPHS:Option<BTreeMap<(u32,u16),Glyph>>=None;
-static mut WRAP:Option<((usize,usize,u32,u32,u32),Vec<String>)>=None;
+static mut WRAP:Option<((String,u32,u32,u32),Vec<String>)>=None;
 fn glyph(pixels:f32,ch:char)->Glyph{unsafe{
  let key=(pixels as u32,u16::try_from(ch as u32).unwrap_or(0xfffd));
  let cache=&mut*core::ptr::addr_of_mut!(GLYPHS);let cache=cache.get_or_insert_with(BTreeMap::new);
@@ -16,11 +16,29 @@ fn glyph(pixels:f32,ch:char)->Glyph{unsafe{
 }}
 const INK:u32=0xff282a2b;const PAPER:u32=0xffc0dce7;const LINE:u32=0xff91a8b6;const GOLD:u32=0xff50d9f1;const WHITE:u32=0xffe8e9e1;
 mod skin { include!("skin_generated.rs"); }
-pub fn init(){
- let data=r::init();unsafe{FONT=imgui::ImFont::load(c"app:/nativeNX/plugins/better-monster-information/NotoSansCJKkr-Regular.otf");}
- let font=unsafe{FONT};let ready=data&&font.is_some()&&STATE.with(|s|s.input_ready);
- STATE.with(|s|s.ready=ready);forge::log::prelude::info!("[monster-info] resources and Korean font ready={}",ready);
+static PENDING_LANGUAGE:core::sync::atomic::AtomicU32=core::sync::atomic::AtomicU32::new(0);
+static mut LANGUAGE_FAILED:bool=false;
+static mut LANGUAGE_CONTEXT:*mut sys::ImGuiContext=core::ptr::null_mut();
+static mut LANGUAGE_HOOK:u32=0;
+fn switch_language(lang:usize,save:bool)->bool{
+ if crate::language::current()!=Some(lang){let Ok(pack)=crate::language::prepare(lang)else{unsafe{LANGUAGE_FAILED=true;}forge::log::prelude::error!("[monster-info] language load failed; previous language retained");return false};crate::language::commit(pack);unsafe{GLYPHS=None;WRAP=None;}}
+ STATE.with(|s|{s.language=lang;s.clock=0.;});unsafe{LANGUAGE_FAILED=false;}
+ if save{let _=crate::storage::save_preferences();}true
 }
+unsafe extern "C" fn before_language_frame(_ctx:*mut sys::ImGuiContext,_hook:*mut sys::ImGuiContextHook){
+ let pending=PENDING_LANGUAGE.swap(0,core::sync::atomic::Ordering::AcqRel);
+ let lang=if pending>0{pending as usize-1}else{STATE.with(|s|s.language)};
+ if pending>0||crate::language::current()!=Some(lang){if !switch_language(lang,pending>0){if let Some(old)=crate::language::current(){STATE.with(|s|s.language=old);}}}
+}
+pub fn init(){unsafe{
+ let ctx=sys::igGetCurrentContext();if ctx==LANGUAGE_CONTEXT&&LANGUAGE_HOOK!=0{return}LANGUAGE_CONTEXT=ctx;LANGUAGE_HOOK=0;
+ crate::storage::poll();crate::language::reset();GLYPHS=None;WRAP=None;FONT=None;
+ let requested=STATE.with(|s|s.language);let language=switch_language(requested,false)||switch_language(0,false);
+ let data=r::init();if crate::language::font_valid(){FONT=imgui::ImFont::load(c"app:/nativeNX/plugins/better-monster-information/languages/font.shared.otf");}
+ let hook=sys::ImGuiContextHook{HookId:0,Type:sys::ImGuiContextHookType::NewFramePre,Owner:0x424d4931,Callback:Some(before_language_frame),UserData:core::ptr::null_mut()};LANGUAGE_HOOK=sys::igAddContextHook(ctx,&hook);
+ let font=FONT;let ready=data&&language&&font.is_some()&&LANGUAGE_HOOK!=0&&STATE.with(|s|s.input_ready);
+ STATE.with(|s|s.ready=ready);forge::log::prelude::info!("[monster-info] single-language resources and subset font ready={}",ready);
+}}
 struct Canvas{draw:imgui::DrawList,scale:f32,ox:f32,oy:f32,right_ox:f32}
 impl Canvas{
  fn new()->Option<Self>{let draw=imgui::DrawList::foreground();if draw.raw().is_null(){return None}let sz=imgui::get_io().DisplaySize;let base=crate::BASE.load(core::sync::atomic::Ordering::Acquire);let v=crate::native::hud_size(base).and_then(|(rw,rh,uw)|crate::layout::hud_viewport(sz.x,sz.y,rw,rh,uw)).or_else(||crate::layout::native_viewport(sz.x,sz.y))?;Some(Self{draw,scale:v.scale,ox:v.ox,oy:v.oy,right_ox:v.right_ox})}
@@ -31,16 +49,16 @@ impl Canvas{
  fn border(&self,x:f32,y:f32,w:f32,h:f32,col:u32){self.draw.add_rect(self.p(x,y),self.p(x+w,y+h),col,0.,self.scale,ImDrawFlags::None);}
  fn line(&self,x:f32,y:f32,x2:f32,y2:f32,col:u32,thickness:f32){self.draw.add_line(self.p(x,y),self.p(x2,y2),col,thickness*self.scale);}
  fn icon(&self,id:usize,x:f32,y:f32,size:f32,tint:u32){let Some(sprite)=g::SPRITES.get(id)else{return};let ratio=size/(sprite.w.max(sprite.h) as f32);let(w,h)=(sprite.w as f32*ratio,sprite.h as f32*ratio);r::icon(self.draw,id,self.p(x+(size-w)*0.5,y+(size-h)*0.5),self.p(x+(size+w)*0.5,y+(size+h)*0.5),tint,false);}
- fn measure(&self,size:f32,text:&str)->f32{
+ fn measure(&self,size:f32,text:impl AsRef<str>)->f32{let text=text.as_ref();
   let pixels=self.pixels(size);let mut line=0_f32;let mut width=0_f32;if crate::perf::legacy(){if let Some(font)=unsafe{FONT}{unsafe{let baked=sys::ImFont_GetFontBaked(font.raw(),pixels,1.);if !baked.is_null(){for ch in text.chars(){if ch=='\n'{width=width.max(line);line=0.;continue}let g=sys::ImFontBaked_FindGlyph(baked,u16::try_from(ch as u32).unwrap_or(0xfffd));if !g.is_null(){line+=(*g).AdvanceX;}}return width.max(line)/self.scale}}}}
   for ch in text.chars(){if ch=='\n'{width=width.max(line);line=0.;continue}line+=glyph(pixels,ch).advance;}width.max(line)/self.scale
  }
- fn label(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:&str,center:bool){
+ fn label(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>,center:bool){let text=text.as_ref();
   let mut clipped=String::new();let full=self.measure(size,text);
   let text=if full>w{for ch in text.chars(){clipped.push(ch);if self.measure(size,&format!("{}…",clipped))>w{clipped.pop();break}}clipped.push('…');clipped.as_str()}else{text};
   self.raw_label(x,y,w,h,size,col,text,center,0.);
  }
- fn raw_label(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:&str,center:bool,offset:f32){
+ fn raw_label(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>,center:bool,offset:f32){let text=text.as_ref();
   let pixels=self.pixels(size);let mut top=f32::MAX;let mut bottom=f32::MIN;
   if crate::perf::legacy(){if let Some(font)=unsafe{FONT}{unsafe{let baked=sys::ImFont_GetFontBaked(font.raw(),pixels,1.);if !baked.is_null(){for ch in text.chars(){let g=sys::ImFontBaked_FindGlyph(baked,u16::try_from(ch as u32).unwrap_or(0xfffd));if !g.is_null()&&(*g).Y1>(*g).Y0{top=top.min((*g).Y0/self.scale);bottom=bottom.max((*g).Y1/self.scale);}}}}}}else{for ch in text.chars(){let g=glyph(pixels,ch);if g.bottom>g.top{top=top.min(g.top/self.scale);bottom=bottom.max(g.bottom/self.scale);}}}
   if top>bottom{top=0.;bottom=size;}
@@ -48,10 +66,10 @@ impl Canvas{
   self.draw.push_clip_rect(self.p(x,y),self.p(x+w,y+h),true);
   if let Some(font)=unsafe{FONT}{self.draw.add_text_with_font(&font,pixels,self.p(tx,ty),col,text)}else{self.draw.add_text(self.p(tx,ty),col,text)}self.draw.pop_clip_rect();
  }
- fn right(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:&str){let mw=self.measure(size,text).min(w);self.label(x+w-mw,y,mw,h,size,col,text,false);}
- fn paragraph(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:&str){
+ fn right(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>){let text=text.as_ref();let mw=self.measure(size,text).min(w);self.label(x+w-mw,y,mw,h,size,col,text,false);}
+ fn paragraph(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>){let text=text.as_ref();
   if crate::perf::legacy(){self.paragraph_uncached(x,y,w,h,size,col,text);return}
-  let key=(text.as_ptr() as usize,text.len(),self.scale.to_bits(),size.to_bits(),w.to_bits());
+  let key=(String::from(text),self.scale.to_bits(),size.to_bits(),w.to_bits());
   unsafe{let cache=&mut*core::ptr::addr_of_mut!(WRAP);
    if cache.as_ref().is_none_or(|(old,_)|*old!=key){
     let mut rows=Vec::new();let mut line=String::new();
@@ -65,7 +83,7 @@ impl Canvas{
    if let Some((_,rows))=cache.as_ref(){let step=size*0.93;for(i,line)in rows.iter().enumerate(){let py=y+i as f32*step;if py+step>y+h{break}self.raw_label(x,py,w,step,size,col,line,false,0.);}}
   }
  }
- fn paragraph_uncached(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:&str){
+ fn paragraph_uncached(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>){let text=text.as_ref();
   let mut line=String::new();let mut py=y;let step=size*0.93;
   for paragraph in text.split('\n'){
    for word in paragraph.split_whitespace(){let candidate=if line.is_empty(){word.into()}else{format!("{} {}",line,word)};
@@ -80,8 +98,8 @@ impl Canvas{
   self.draw.add_triangle_filled(self.p(x,y-10.),self.p(x+12.,y),self.p(x,y+10.),INK);
   self.draw.add_triangle_filled(self.p(x+2.,y-7.),self.p(x+9.,y),self.p(x+2.,y+7.),if active{GOLD}else{0xff8fa8bc});
  }
- fn bar(&self,x:f32,button:usize,label:&str){self.rect(x+2.,674.,156.,28.,0xff000000);r::icon(self.draw,g::PROMPT_END,self.p(x,674.),self.p(x+12.,702.),0xffffffff,false);r::icon(self.draw,g::PROMPT_END,self.p(x+148.,674.),self.p(x+160.,702.),0xffffffff,true);self.icon(button,x+8.,679.,18.,WHITE);self.label(x+30.,674.,124.,28.,24.,WHITE,label,false);}
- fn form_bar(&self,s:&State){let label=t(g::UI_FORMSELECT[0],s);let w=(self.measure(24.,label)+46.).max(160.);let x=569.-w;self.rect(x+2.,674.,w-4.,28.,0xff000000);r::icon(self.draw,g::PROMPT_END,self.p(x,674.),self.p(x+12.,702.),0xffffffff,false);r::icon(self.draw,g::PROMPT_END,self.p(x+w-12.,674.),self.p(x+w,702.),0xffffffff,true);self.icon(g::PROMPTS[s.layout][5],x+8.,679.,18.,WHITE);self.label(x+30.,674.,w-36.,28.,24.,WHITE,label,false);}
+ fn bar(&self,x:f32,button:usize,label:impl AsRef<str>){let label=label.as_ref();self.rect(x+2.,674.,156.,28.,0xff000000);r::icon(self.draw,g::PROMPT_END,self.p(x,674.),self.p(x+12.,702.),0xffffffff,false);r::icon(self.draw,g::PROMPT_END,self.p(x+148.,674.),self.p(x+160.,702.),0xffffffff,true);self.icon(button,x+8.,679.,18.,WHITE);self.label(x+30.,674.,124.,28.,24.,WHITE,label,false);}
+ fn form_bar(&self,s:&State){let label=t(g::UI_FORMSELECT[0],s);let w=(self.measure(24.,&label)+46.).max(160.);let x=569.-w;self.rect(x+2.,674.,w-4.,28.,0xff000000);r::icon(self.draw,g::PROMPT_END,self.p(x,674.),self.p(x+12.,702.),0xffffffff,false);r::icon(self.draw,g::PROMPT_END,self.p(x+w-12.,674.),self.p(x+w,702.),0xffffffff,true);self.icon(g::PROMPTS[s.layout][5],x+8.,679.,18.,WHITE);self.label(x+30.,674.,w-36.,28.,24.,WHITE,label,false);}
  fn panel(&self,x:f32,y:f32,w:f32,h:f32){
   if crate::perf::legacy(){self.panel_legacy(x,y,w,h);return}
   self.rect(x+4.,y+4.,w-8.,h-8.,0xdc0c0e21);
@@ -110,7 +128,7 @@ impl Canvas{
   if offset+crate::layout::PAGE_ROWS<total{self.draw.add_triangle_filled(self.p(x-1.,y+h+5.),self.p(x+8.,y+h+5.),self.p(x+3.5,y+h+11.),INK);}
  }
 }
-fn t(id:u32,s:&State)->&'static str{r::text(id,s.language)}
+fn t(id:u32,s:&State)->String{r::text(id,s.language)}
 fn number(v:f32)->String{if v<0.{String::from("—")}else if v==v as u32 as f32{format!("{}",v as u32)}else{let scaled=(v*100000.+0.5) as u32;let fraction=scaled%100000;let mut tail=format!("{}",fraction);while tail.len()<5{tail.insert(0,'0');}let mut out=format!("{}.{}",scaled/100000,tail);while out.ends_with('0'){out.pop();}out}}
 fn percent(v:i16)->String{if v==-1{String::from("—")}else if v==-2{String::from("…")}else if v%100==0{format!("{}%",v/100)}else{format!("{}.{}{}%",v/100,(v%100)/10,v%10)}}
 fn weak_table(cv:&Canvas,s:&State){
@@ -133,7 +151,7 @@ fn weak_table(cv:&Canvas,s:&State){
   let y=268.+(visible-s.scroll) as f32*34.;let selected=visible==s.row;
   if selected{cv.rect(364.,y,520.,33.,if s.mode==1{0xff63cfe8}else{0xffaed0df});cv.cursor(348.,y+17.,s.mode==1,s.clock);}
   cv.line(364.,y+33.,884.,y+33.,LINE,1.);
-  let text=t(row.name,s);let width=cv.measure(20.,text);let available=143.;
+  let text=t(row.name,s);let width=cv.measure(20.,&text);let available=143.;
   if selected&&width>available&&s.clock>1.{let travel=(width-available)/30.;let elapsed=(s.clock-1.)%(travel+3.);let offset=if elapsed<travel{elapsed*30.}else if elapsed<travel+2.{width-available}else{0.};cv.raw_label(372.,y,available,33.,20.,INK,text,false,offset);}
   else{cv.label(372.,y,available,33.,20.,INK,text,false);}
   for (i,value) in row.values.iter().enumerate(){cv.label(518.+i as f32*46.,y,46.,33.,24.,INK,&number(*value),true);}
@@ -216,10 +234,11 @@ pub fn menu(){
  let font=unsafe{FONT};if let Some(f)=font{imgui::push_font(&f,Some(18.));}
  let names=["English","简体中文","繁體中文","日本語","한국어","Deutsch","Français","Italiano","Español"];let layouts=["Nintendo","Xbox","PlayStation"];let(lang,layout)=STATE.with(|s|(s.language,s.layout));let mut changed=false;
  for(label,options,current,is_language)in [(c"Language",&names[..],lang,true),(c"Button layout",&layouts[..],layout,false)]{
-  let selected=CString::new(options[current]).unwrap();if imgui::begin_combo(label,&selected,ImGuiComboFlags::None){for(i,name)in options.iter().enumerate(){let text=CString::new(*name).unwrap();if imgui::selectable(&text,i==current,ImGuiSelectableFlags::None,ImVec2{x:0.,y:0.}){STATE.with(|s|{if is_language{s.language=i}else{s.layout=i}s.clock=0.;});changed=true;}}imgui::end_combo();}
+  let selected=CString::new(options[current]).unwrap();if imgui::begin_combo(label,&selected,ImGuiComboFlags::None){for(i,name)in options.iter().enumerate(){let text=CString::new(*name).unwrap();if imgui::selectable(&text,i==current,ImGuiSelectableFlags::None,ImVec2{x:0.,y:0.}){if is_language{PENDING_LANGUAGE.store(i as u32+1,core::sync::atomic::Ordering::Release);}else{STATE.with(|s|{s.layout=i;s.clock=0.;});changed=true;}}}imgui::end_combo();}
  }
  if changed&&!crate::storage::save_preferences(){imgui::text("Settings could not be saved. See Forge log.");}
- imgui::text(r::text(g::UI_NOTESINFO[0],STATE.with(|s|s.language)));
+ imgui::text(&r::text(g::UI_NOTESINFO[0],STATE.with(|s|s.language)));
  if !STATE.with(|s|s.ready){imgui::text("Unavailable: resource, input, or signature check failed.");}
+ if unsafe{LANGUAGE_FAILED}{imgui::text("Language resources could not be loaded. The previous language is retained.");}
  if font.is_some(){imgui::pop_font();}imgui::tree_pop();
 }

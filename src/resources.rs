@@ -2,14 +2,13 @@ use alloc::{vec,vec::Vec,ffi::CString};
 use core::ffi::CStr;
 use forge::{imgui::DrawList,sys::imgui::{self as sys,ImVec2,ImTextureRef}};
 use crate::generated as g;
-static mut TEXT:Option<Vec<u8>>=None;
 static mut ICONS:Option<ImTextureRef>=None;
 static mut DIAGRAM:Option<(*mut sys::ImTextureData,ImTextureRef,u16)>=None;
 
-unsafe fn read_file(path:&CStr)->Option<Vec<u8>>{unsafe{
+pub(crate) unsafe fn read_file(path:&CStr)->Option<Vec<u8>>{unsafe{
     let file=sys::igImFileOpen(path.as_ptr(),c"rb".as_ptr());if file.is_null(){return None}
     let size=sys::igImFileGetSize(file);if size>16*1024*1024{sys::igImFileClose(file);return None}
-    let mut bytes=vec![0;size as usize];let read=sys::igImFileRead(bytes.as_mut_ptr().cast(),1,size,file);sys::igImFileClose(file);
+    let mut bytes=Vec::new();if bytes.try_reserve_exact(size as usize).is_err(){sys::igImFileClose(file);return None}bytes.resize(size as usize,0);let read=sys::igImFileRead(bytes.as_mut_ptr().cast(),1,size,file);sys::igImFileClose(file);
     if read!=size{None}else{Some(bytes)}
 }}
 unsafe fn texture(path:&CStr,w:u16,h:u16)->Option<(*mut sys::ImTextureData,ImTextureRef)>{unsafe{
@@ -23,25 +22,12 @@ unsafe fn texture(path:&CStr,w:u16,h:u16)->Option<(*mut sys::ImTextureData,ImTex
     if read!=size{sys::ImTextureData_destroy(tex);return None}
     sys::igRegisterUserTexture(tex);Some((tex,sys::ImTextureData_GetTexRef(tex)))
 }}
-fn word(bytes:&[u8],offset:usize)->Option<u32>{Some(u32::from_le_bytes(bytes.get(offset..offset+4)?.try_into().ok()?))}
 pub fn init()->bool{unsafe{
-    let Some(bytes)=read_file(c"app:/nativeNX/plugins/better-monster-information/monster-text.bin") else{return false};
-    if bytes.get(..8)!=Some(b"BMITXT01")||bytes.len()<12{return false}
-    let count=word(&bytes,8).unwrap_or(0) as usize;
-    if count==0||12+count*36>bytes.len()||core::str::from_utf8(&bytes[12+count*36..]).is_err(){return false}
-    for i in 0..count*9{let Some(offset)=word(&bytes,12+i*4) else{return false};if (offset as usize)<12+count*36||offset as usize>=bytes.len(){return false}}
-    TEXT=Some(bytes);
     ICONS=texture(c"app:/nativeNX/plugins/better-monster-information/monster-icons.rgba",2048,g::ATLAS_HEIGHT as u16).map(|(_,reference)|reference);
-    let ready=core::ptr::addr_of!(ICONS).read().is_some();forge::log::prelude::info!("[monster-info] {} multilingual text records; icon atlas ready={}",count,ready);ready
+    let ready=core::ptr::addr_of!(ICONS).read().is_some();forge::log::prelude::info!("[monster-info] icon atlas ready={}",ready);ready
 }}
-pub fn text(id:u32,lang:usize)->&'static str{unsafe{
-    let Some(bytes)=(&*core::ptr::addr_of!(TEXT)).as_ref() else{return "—"};
-    let count=word(bytes,8).unwrap_or(0);if id>=count{return "—"}
-    let offset=word(bytes,12+id as usize*36+lang.min(8)*4).unwrap_or(0) as usize;
-    let Some(rest)=bytes.get(offset..) else{return "—"};
-    let end=rest.iter().position(|&b|b==0).unwrap_or(0);
-    core::str::from_utf8(&rest[..end]).unwrap_or("—")
-}}
+// Rules have identical strings in every pack; UI reads the committed language.
+pub fn text(id:u32,_lang:usize)->alloc::string::String{crate::language::text(id)}
 pub static DIAGRAM_MODE:core::sync::atomic::AtomicU32=core::sync::atomic::AtomicU32::new(if cfg!(bmi_low_memory){2}else{0});
 pub static DIAGRAM_TRACE:core::sync::atomic::AtomicBool=core::sync::atomic::AtomicBool::new(false);
 static mut TRACE:Option<alloc::string::String>=None;

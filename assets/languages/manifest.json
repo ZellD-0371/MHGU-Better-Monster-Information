@@ -1,0 +1,59 @@
+{
+  "inputs_sha256": "294bd3a7b4e8cc9a1097c1845bb74e2f6338785c8fcd47b72706a8342f5bc99d",
+  "codes": [
+    "en",
+    "zh-Hans",
+    "zh-Hant",
+    "ja",
+    "ko",
+    "de",
+    "fr",
+    "it",
+    "es"
+  ],
+  "count": 4698,
+  "characters": 3924,
+  "original_font_bytes": 16433112,
+  "files": {
+    "text.en.bin": {
+      "bytes": 173884,
+      "crc32": 3171232561
+    },
+    "text.zh-Hans.bin": {
+      "bytes": 203954,
+      "crc32": 245547575
+    },
+    "text.zh-Hant.bin": {
+      "bytes": 193940,
+      "crc32": 3669321639
+    },
+    "text.ja.bin": {
+      "bytes": 183926,
+      "crc32": 565720387
+    },
+    "text.ko.bin": {
+      "bytes": 223193,
+      "crc32": 3850698533
+    },
+    "text.de.bin": {
+      "bytes": 176215,
+      "crc32": 2501094386
+    },
+    "text.fr.bin": {
+      "bytes": 175512,
+      "crc32": 3266494176
+    },
+    "text.it.bin": {
+      "bytes": 175104,
+      "crc32": 871995217
+    },
+    "text.es.bin": {
+      "bytes": 177089,
+      "crc32": 2904762464
+    },
+    "font.shared.otf": {
+      "bytes": 1783016,
+      "crc32": 2542047466
+    }
+  }
+}
