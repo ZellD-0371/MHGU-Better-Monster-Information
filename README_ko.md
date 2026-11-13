@@ -50,7 +50,7 @@ mods/
 ### 일반용 / 저사양용
 
 - 일반용: `Better-Monster-Information_vX.X.X.zip` — 원본 아이콘 화질을 유지한 4MiB 아틀라스와 원본 해상도 부위 그림.
-- 저사양용: `Better-Monster-Information_LowMemory_vX.X.X.zip` — 최대 32px 아이콘 아틀라스(약 1.06MiB)와 미리 축소한 개별 부위 그림(최대 384×256).
+- 저사양용: `Better-Monster-Information_LowMemory_vX.X.X.zip` — 아이콘 크기를 최대 32px로 제한하고, 약 1.06MiB 크기의 텍스처 아틀라스를 사용합니다. 몬스터 부위 도식은 384×256픽셀 이내에 맞도록 미리 크기를 조정했습니다.
 
 > [!IMPORTANT]
 > 에뮬레이터 유저는 **저사양용**을 사용해주세요.

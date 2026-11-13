@@ -49,10 +49,10 @@ mods/
 ### Standard / Low Memory
 
 - Standard: `Better-Monster-Information_vX.X.X.zip` — a losslessly repacked 4MiB icon atlas and full-resolution body diagrams.
-- Low Memory: `Better-Monster-Information_LowMemory_vX.X.X.zip` — icons capped at 32px in an approximately 1.06MiB atlas; individual diagrams pre-resized to fit a 384×256 canvas.
+- Low Memory: `Better-Monster-Information_LowMemory_vX.X.X.zip` — icons capped at 32px in an approximately 1.06MiB atlas; body part diagrams pre-resized to fit within 384×256 pixels.
 
 > [!IMPORTANT]
-> If you're using an emulator, please use the **LowMemory version**.
+> If you're using an emulator, please use the **Low Memory version**.
 
 Both versions load the icon atlas when the monster notes are opened and diagrams when needed. Closing the notes releases both textures and their pixel buffers after pending graphics work finishes; reopening reloads the required resources.
 
