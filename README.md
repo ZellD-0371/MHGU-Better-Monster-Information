@@ -89,3 +89,13 @@ Automated tests do not replace in-game input and visual testing.
 ## Repository structure
 
 `src`, `.cargo`, `link`, `conf`, `assets/native`, and `tools` contain the files required to build, test, and package the native mod. Keep `Cargo.lock`, the generated Rust data, and the native resources alongside them.
+
+## Sources and credits
+
+The body part diagrams and hitzone/material database were not created by me or independently extracted from the game by me. They were adapted from the [MHXX Dex web port](https://mhxx-dex.pages.dev/) and the Ping’s MHXX Dex database family. This mod adds the in-game UI and input integration, display-data conversion, and part-selection highlights. Player progression and inventory information are read separately from the game.
+
+- **Ping** — original MHXX Dex
+- **fabric_soul** — MHXX Dex web port
+- Contributors credited by the web port: breakds, 掌机迷, MHVuze, svanheulen, ACG汉化组, dasding and team, 팀 갈무리, Zeff and team. This list does not establish authorship of each individual diagram.
+- **Noto Sans CJK KR** — SIL Open Font License 1.1
+- **mhgu-forge / forge-rs** — Fexty, MIT License
