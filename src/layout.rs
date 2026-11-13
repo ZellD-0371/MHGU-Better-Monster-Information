@@ -33,3 +33,6 @@ pub fn scrollbar(total:usize,visible:usize,offset:usize,height:f32)->Option<(f32
     let top=(height-thumb)*offset.min(total-visible) as f32/(total-visible) as f32;
     Some((top,thumb))
 }
+
+/// UTF-8 safe, linear prefix fitting with no temporary allocation.
+pub fn fitting_prefix(text:&str,available:f32,mut width:impl FnMut(char)->f32)->usize{let mut sum=0.;let mut end=0;for(at,ch)in text.char_indices(){let next=sum+width(ch);if next>available{break}sum=next;end=at+ch.len_utf8();}end}

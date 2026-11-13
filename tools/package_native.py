@@ -21,7 +21,7 @@ def main():
     shutil.copy2(ROOT/'assets/NOTO_LICENSE.txt',assets/'OFL.md')
     shutil.copy2(ROOT/'conf/FORGE_LICENSE.txt',assets/'FORGE_LICENSE.md')
     shutil.copy2(ROOT/'CREDITS.md',assets/'CREDITS.md')
-    shutil.copytree(ROOT/'assets/native/parts',assets/'parts',dirs_exist_ok=True)
+    shutil.copytree(ROOT/('assets/native-low' if variant=='low-memory' else 'assets/native')/'parts',assets/'parts',dirs_exist_ok=True)
     mod=target.parents[2]
     for name in ['README.txt','설치와 조작.txt','DISTRIBUTION_NOTICE.txt','THIRD_PARTY_NOTICES.txt','FORGE_LICENSE.txt']:
         (mod/name).unlink(missing_ok=True)

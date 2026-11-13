@@ -112,21 +112,22 @@ fn refresh_extra_title(base:u32,owner:u32){
     let text=unsafe{lookup(manager,3,name_index)};
     if text>=0x10000{unsafe{set_text(owner,1,2,text)};}
 }
-pub struct Snapshot{pub id:u16,pub note:u8,pub row:usize,pub pages:u8,pub extra:bool,pub notes:[u16;123],pub len:usize}
+pub struct Snapshot{pub id:u16,pub note:u8,pub pages:u8,pub extra:bool}
+pub fn notes_open(base:u32)->bool{
+    let owner=OWNER.load(Ordering::Acquire);
+    base!=0&&valid(owner)&&unsafe{rd(owner)==base+0x177062c&&byte(owner+0x18)==1}
+}
 pub fn snapshot(base:u32)->Option<Snapshot>{
     let owner=OWNER.load(Ordering::Acquire);
-    if !valid(owner)||unsafe{byte(owner+0x18)}!=1{return None}
-    let (list,pager,id,note,row)=selected(base,owner)?;
+    if !notes_open(base){return None}
+    let (_,pager,id,note,_)=selected(base,owner)?;
     let page=unsafe{virtual_get(base,pager,0x24)}.unwrap_or(u32::MAX);
     let count=unsafe{byte(owner+0x50)};let key=(note as u32)<<16|page;
     if LAST.swap(key,Ordering::AcqRel)!=key{
         info!("[monster-info] note={} db={} page={}/{} owner={:08x}",note,id,page,count,owner);
     }
     let pages=COUNT.load(Ordering::Acquire) as u8;
-    let len=unsafe{byte(list+0x50)} as usize;if len>123{return None}
-    let entries=unsafe{rd(list+0x58)};let mut notes=[0;123];
-    for (i,item) in notes.iter_mut().enumerate().take(len){*item=crate::generated::NATIVE_MAP.get(unsafe{byte(entries+i as u32)} as usize).copied().unwrap_or(0);}
-    Some(Snapshot{id,note,row,pages,extra:crate::layout::supports_monster(id)&&count==pages+1&&page==pages as u32,notes,len})
+    Some(Snapshot{id,note,pages,extra:crate::layout::supports_monster(id)&&count==pages+1&&page==pages as u32})
 }
 pub fn progress(base:u32)->crate::model::Progress{
     let mut result=crate::model::Progress::EMPTY;

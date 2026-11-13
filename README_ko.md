@@ -51,8 +51,10 @@ mods/
 
 ### 일반용 / 저사양용
 
-- 일반용: `Better-Monster-Information_vX.X.X.zip` — 기존 아이콘과 원본 해상도 부위 그림.
-- 저사양용: `Better-Monster-Information_LowMemory_vX.X.X.zip` — 최대 32px 아이콘 아틀라스(2MiB)와 실행 중 축소 부위 그림(최대 384×256).
+- 일반용: `Better-Monster-Information_vX.X.X.zip` — 원본 아이콘 화질을 유지한 4MiB 아틀라스와 원본 해상도 부위 그림.
+- 저사양용: `Better-Monster-Information_LowMemory_vX.X.X.zip` — 최대 32px 아이콘 아틀라스(약 1.06MiB)와 미리 축소한 개별 부위 그림(최대 384×256).
+
+두 버전 모두 몬스터 도감을 열 때 아이콘 아틀라스를, 필요할 때 부위 그림을 불러옵니다. 도감을 닫으면 진행 중인 화면 처리가 끝나는 대로 두 텍스처와 픽셀 버퍼를 해제하며, 다시 열면 필요한 리소스를 다시 불러옵니다.
 
 두 버전은 같은 모드 폴더와 설정을 사용합니다. 하나만 설치하고, 변경 시 게임을 종료한 뒤 해당 폴더를 교체하세요. 
 
@@ -100,6 +102,7 @@ py -3.10 -X utf8 tools/package_native.py
 # Regenerate changed text/font inputs with fontTools.
 py -3.10 -X utf8 tools/prepare_languages.py
 # Generate the small atlas only when icon inputs change (requires Pillow).
+py -3.10 -X utf8 tools/optimize_icon_atlas.py
 py -3.10 -X utf8 tools/prepare_low_memory.py
 ./tools/Build.ps1 -Variant low-memory
 ./tools/Test.ps1 -Variant low-memory

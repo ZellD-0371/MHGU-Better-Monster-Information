@@ -59,18 +59,20 @@ pub struct State{
     pub rank:u8,pub ranks:Vec<u8>,pub rank_cursor:usize,pub detail_scroll:usize,pub clock:f32,
     pub language:usize,pub layout:usize,pub progress:Progress,
     pub progress_age:f32,pub stock_age:f32,pub stock_item:Option<u16>,
-    pub notes:[u16;123],pub notes_len:usize,pub native_row:usize,pub owned:Option<u32>,
+    pub owned:Option<u32>,
     repeat_direction:i8,repeat_time:f32,
 }
 impl State{
-    pub fn new()->Self{Self{enabled:true,installed:false,ready:false,input_ready:false,visible:false,id:48,native_id:48,form_cursor:0,native_note:34,original_pages:3,mode:0,tab:0,row:0,scroll:0,rank:1,ranks:Vec::new(),rank_cursor:0,detail_scroll:0,clock:0.,language:0,layout:0,progress:Progress::EMPTY,progress_age:1.,stock_age:1.,stock_item:None,notes:[0;123],notes_len:0,native_row:0,owned:None,repeat_direction:0,repeat_time:0.}}
-    pub fn forms(&self)->Vec<u16>{
+    pub fn new()->Self{Self{enabled:true,installed:false,ready:false,input_ready:false,visible:false,id:48,native_id:48,form_cursor:0,native_note:34,original_pages:3,mode:0,tab:0,row:0,scroll:0,rank:1,ranks:Vec::new(),rank_cursor:0,detail_scroll:0,clock:0.,language:0,layout:0,progress:Progress::EMPTY,progress_age:1.,stock_age:1.,stock_item:None,owned:None,repeat_direction:0,repeat_time:0.}}
+    pub fn form_ids(&self)->impl Iterator<Item=u16>+'_ {
         g::FAMILIES.iter().filter_map(|&(parent,id)|{
             if parent!=self.native_id{return None}
             let m=&g::MONSTERS[id as usize];
             (id==parent||self.progress.hunted_special(id)&&g::MATERIALS[m.material as usize..(m.material+m.material_len) as usize].iter().any(|r|rank_unlocked(id,r.rank,&self.progress))).then_some(id)
-        }).collect()
+        })
     }
+    pub fn forms(&self)->Vec<u16>{self.form_ids().collect()}
+    pub fn has_forms(&self)->bool{self.form_ids().nth(1).is_some()}
     pub fn reset_form(&mut self){self.id=self.native_id;self.form_cursor=0;self.recompute(true);}
     pub fn materials(&self)->impl Iterator<Item=&'static Material>{let m=&g::MONSTERS[self.id as usize];g::MATERIALS[m.material as usize..(m.material+m.material_len) as usize].iter().filter(|r|r.rank==self.rank)}
     pub fn material(&self)->Option<&'static Material>{self.materials().nth(self.row)}
@@ -109,7 +111,7 @@ impl State{
             self.detail_scroll=if event&SCROLL_UP!=0{self.detail_scroll.saturating_sub(1)}else{(self.detail_scroll+1).min(max)};return
         }
         if self.mode==0{
-            if event&FORM!=0&&self.forms().len()>1{self.mode=3;self.form_cursor=self.forms().iter().position(|&id|id==self.id).unwrap_or(0)}
+            if event&FORM!=0&&self.has_forms(){self.mode=3;self.form_cursor=self.forms().iter().position(|&id|id==self.id).unwrap_or(0)}
             else if event&(PREV|NEXT)!=0{self.tab=(self.tab+if event&NEXT!=0{1}else{3})%4;self.row=0;self.scroll=0;self.detail_scroll=0;self.clock=0.;self.recompute(true)}
             else if event&RANK!=0&&self.tab==3&&self.ranks.len()>1{self.mode=2;self.rank_cursor=self.ranks.iter().position(|&r|r==self.rank).unwrap_or(0)}
             else if event&ACCEPT!=0&&self.interactive(){self.mode=1;}

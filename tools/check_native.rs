@@ -1,4 +1,31 @@
 extern crate alloc;
+#[path="../src/numeric.rs"]mod numeric;
+#[path="../src/retry.rs"]mod retry;
+#[path="../src/diagram_lifetime.rs"]mod diagram_lifetime;
+
+#[test]fn diagram_releases_on_close_only_after_backend_completion(){
+ use diagram_lifetime::{Lifetime,Status as S,Action as A};let mut life=Lifetime::NEW;
+ assert_eq!(life.advance(false,None),A::Keep);
+ for _ in 0..300{assert_eq!(life.advance(true,Some(S::Ready)),A::Keep);}
+ assert_eq!(life.advance(false,Some(S::Ready)),A::RequestDestroy);
+ assert!(life.retiring());
+ // Reopening cannot cancel an in-flight destruction or reuse that texture.
+ assert_eq!(life.advance(true,Some(S::Busy)),A::WaitForDestroy(2));
+ assert_eq!(life.advance(true,Some(S::Destroyed)),A::Free);assert!(!life.retiring());
+ assert_eq!(life.advance(true,Some(S::Ready)),A::Keep);
+}
+#[test]fn diagram_waits_for_upload_and_handles_repeated_closes(){
+ use diagram_lifetime::{Lifetime,Status as S,Action as A};let mut life=Lifetime::NEW;
+ for _ in 0..300{assert_eq!(life.advance(false,Some(S::Busy)),A::Keep);}
+ // An upload completing after a quick reopen must remain usable.
+ assert_eq!(life.advance(true,Some(S::Ready)),A::Keep);
+ for _ in 0..1000{
+  assert_eq!(life.advance(false,Some(S::Ready)),A::RequestDestroy);
+  assert_eq!(life.advance(false,Some(S::Busy)),A::WaitForDestroy(2));
+  assert_eq!(life.advance(false,Some(S::Destroyed)),A::Free);
+  assert_eq!(life.advance(false,None),A::Keep);
+ }
+}
 #[path="../src/language_pack.rs"]mod language_pack;
 #[path="../src/layout.rs"]mod layout;
 #[path="../src/data.rs"]mod data;
@@ -33,7 +60,7 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
 #[test]fn cleared_bitmap_uses_quest_index(){let mut p=high();let(q,index)=generated::QUESTS[20];assert!(!p.cleared(q));p.cleared[index as usize/8]|=1<<(index as usize%8);assert!(p.cleared(q));assert!(rule_open(&format!("flag:1008 AND cleared:{}",q),&p));assert!(!rule_open("flag:1401 AND hr:8",&p));}
 #[test]fn deviant_all_access_when_all_conditions_met(){let mut p=high();p.flags.fill(u32::MAX);p.cleared.fill(255);p.hr=999;p.hub=20;for (id,m)in generated::MONSTERS.iter().enumerate(){if m.deviant>=0{for rank in generated::MATERIALS[m.material as usize..(m.material+m.material_len) as usize].iter().map(|r|r.rank){assert!(rank_open(id as u16,rank,&p),"monster {id}, rank {rank}");}}}}
 #[test]fn scrollbars_show_overflow_and_reach_both_ends(){assert!(layout::scrollbar(8,8,0,272.).is_none());let(first,h)=layout::scrollbar(24,8,0,272.).unwrap();let(last,last_h)=layout::scrollbar(24,8,16,272.).unwrap();assert_eq!(first,0.);assert_eq!(h,last_h);assert!((last+h-272.).abs()<0.001);assert!(layout::scrollbar(24,8,8,272.).unwrap().0>first);assert!(layout::scrollbar(240,8,0,272.).unwrap().1>=18.);}
-#[test]fn native_diagrams_preserve_full_source_resolution(){use generated as g;assert_eq!(g::DIAGRAM_SOURCES.iter().filter(|&&(w,_)|w>0).count(),89);for(i,&(w,h))in g::DIAGRAM_SOURCES.iter().enumerate(){if w==0{continue}assert!(w as usize<=g::DIAGRAM_TEX_W&&h as usize<=g::DIAGRAM_TEX_H);assert!(w>=g::DIAGRAMS[i].0&&h>=g::DIAGRAMS[i].1);}assert!(g::DIAGRAM_TEX_W>=1000);}
+#[test]fn native_diagrams_preserve_full_source_resolution(){use generated as g;assert_eq!(g::DIAGRAM_SOURCES.iter().filter(|&&(w,_)|w>0).count(),89);for(i,&(w,h))in g::DIAGRAM_SOURCES.iter().enumerate(){if w==0{continue}assert!(w as usize<=g::DIAGRAM_TEX_W&&h as usize<=g::DIAGRAM_TEX_H);assert!(w>=g::DIAGRAMS[i].0&&h>=g::DIAGRAMS[i].1);}if cfg!(bmi_low_memory){assert_eq!((g::DIAGRAM_TEX_W,g::DIAGRAM_TEX_H),(384,256));}else{assert!(g::DIAGRAM_TEX_W>=1000);}}
 
 #[test]fn rank_history_is_character_isolated_and_events_keep_actual_rank(){let mut masks=[0;130];masks[48]=1<<2;let text=history_format::encode(0x12345678,&masks);assert_eq!(history_format::decode(&text,0x12345678),Some(masks));assert!(history_format::decode(&text,0x87654321).is_none());assert_eq!(history_format::event_mask(48,3,11401),1<<3);assert_eq!(history_format::event_mask(48,0,11401),0);}
 #[test]fn unlocked_ranks_no_longer_require_a_hunt(){let mut p=high();p.hunted.fill(0);assert!(!REQUIRE_RANK_HUNT);assert!(rank_open(48,1,&p));assert!(rank_open(48,2,&p));assert!(!rank_open(48,3,&p));let mut s=State::new();s.progress=p;s.recompute(true);assert_eq!(s.rank,2);assert_eq!(s.ranks,[1,2]);s.progress.flags[1401/32]|=1<<(1401%32);s.recompute(true);assert_eq!(s.rank,3);assert_eq!(s.ranks,[1,2,3]);s.progress.valid=false;s.recompute(true);assert!(s.ranks.is_empty());}
@@ -55,3 +82,13 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
  let mut broken=ko;broken[20]^=1;assert!(language_pack::Pack::prepare(4,broken).is_err());assert_eq!(store.active.as_ref().unwrap().language,4);assert!(language_pack::Pack::prepare(0,Vec::new()).is_err());
 }
 #[test]fn shared_subset_font_integrity(){let f=std::fs::read("assets/languages/font.shared.otf").unwrap();assert_eq!(f.len(),language_pack::FONT.0);assert_eq!(!language_pack::crc_step(!0,&f),language_pack::FONT.1);assert!(f.len()<2*1024*1024);assert_eq!(&f[..4],b"OTTO");}
+
+#[test]fn every_diagram_file_matches_variant_dimensions(){let dir=if cfg!(bmi_low_memory){"assets/native-low/parts"}else{"assets/native/parts"};let mut count=0;for(id,&(w,h))in generated::DIAGRAM_SOURCES.iter().enumerate(){if w==0{continue}count+=1;assert_eq!(std::fs::metadata(format!("{}/{}.rgba",dir,id)).unwrap().len(),w as u64*h as u64*4);assert!(w as usize<=generated::DIAGRAM_TEX_W&&h as usize<=generated::DIAGRAM_TEX_H);}assert_eq!(count,89);}
+
+#[test]fn fitting_prefix_is_linear_and_keeps_unicode_boundaries(){let s="머리 · Broken";let mut calls=0;let n=layout::fitting_prefix(s,3.,|_|{calls+=1;1.});assert_eq!(&s[..n],"머리 ");assert_eq!(calls,4);assert_eq!(layout::fitting_prefix(s,0.,|_|1.),0);assert_eq!(layout::fitting_prefix(s,100.,|_|1.),s.len());}
+
+#[test]fn text_cache_reuses_allocations_stays_bounded_and_survives_swap(){use alloc::rc::Rc;let bytes=std::fs::read("assets/languages/text.en.bin").unwrap();let pack=language_pack::Pack::prepare(0,bytes.clone()).ok().unwrap();let mut cache=language_pack::TextCache::EMPTY;let a=cache.get(&pack,generated::UI_NOTESINFO[0]);let b=cache.get(&pack,generated::UI_NOTESINFO[0]);assert!(Rc::ptr_eq(&a,&b));for i in 0..language_pack::COUNT as u32{cache.get(&pack,i);let(n,bytes)=cache.usage();assert!(n<=64&&bytes<=16384);}let mut store=language_pack::Store::default();store.commit(language_pack::Pack::prepare(0,bytes).ok().unwrap());let old=store.text(generated::UI_NOTESINFO[0]);store.commit(language_pack::Pack::prepare(4,std::fs::read("assets/languages/text.ko.bin").unwrap()).ok().unwrap());assert!(old.contains("Hunter"));assert!(store.text(generated::UI_NOTESINFO[0]).contains("헌터"));}
+
+#[test]fn numeric_labels_match_old_format_without_allocating_for_all_db_values(){use alloc::borrow::Cow;for row in &generated::WEAK{for v in row.values{let text=numeric::number(v);assert!(matches!(text,Cow::Borrowed(_)));assert_eq!(text,numeric::format_number(v));}}for row in generated::AILMENTS.iter().chain(generated::TRAPS.iter()){for v in row.values{let text=numeric::number(v);assert!(matches!(text,Cow::Borrowed(_)));assert_eq!(text,numeric::format_number(v));}}for row in &generated::MATERIALS{for v in row.cells{let text=numeric::percent(v);assert!(matches!(text,Cow::Borrowed(_)));assert_eq!(text,numeric::format_percent(v));}}for row in &generated::ACQUISITIONS{let text=numeric::percent(row.percent as i16);assert!(matches!(text,Cow::Borrowed(_)));assert_eq!(text,numeric::format_percent(row.percent as i16));}}
+#[test]fn unknown_numeric_values_keep_legacy_fallback(){assert_eq!(numeric::number(12345.125),numeric::format_number(12345.125));assert_eq!(numeric::percent(12345),numeric::format_percent(12345));assert_eq!(numeric::percent(-1),"—");assert_eq!(numeric::percent(-2),"…");}
+#[test]fn failed_diagram_attempts_stop_and_can_be_reset(){let mut gate=retry::RetryGate::NEW;gate.select(41);let mut attempts=0;for _ in 0..3000{if gate.allows(){attempts+=1;gate.failed();}gate.tick(1./60.,true);}assert_eq!(attempts,3);assert!(!gate.allows());gate.select(45);assert!(gate.allows());gate.failed();assert!(!gate.allows());gate.tick(4.,true);assert!(!gate.allows());gate.tick(1.1,true);assert!(gate.allows());gate.failed();gate.succeeded();assert!(gate.allows());gate.failed();gate.tick(0.,false);gate.select(45);assert!(gate.allows());}

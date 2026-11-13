@@ -50,8 +50,10 @@ mods/
 
 ### Standard / Low Memory
 
-- Standard: `Better-Monster-Information_vX.X.X.zip` — original icon atlas and full-resolution body diagrams.
-- Low Memory: `Better-Monster-Information_LowMemory_vX.X.X.zip` — icons capped at 32px in a 2MiB atlas; diagrams scaled at runtime to a maximum 384×256 canvas.
+- Standard: `Better-Monster-Information_vX.X.X.zip` — a losslessly repacked 4MiB icon atlas and full-resolution body diagrams.
+- Low Memory: `Better-Monster-Information_LowMemory_vX.X.X.zip` — icons capped at 32px in an approximately 1.06MiB atlas; individual diagrams pre-resized to fit a 384×256 canvas.
+
+Both versions load the icon atlas when the monster notes are opened and diagrams when needed. Closing the notes releases both textures and their pixel buffers after pending graphics work finishes; reopening reloads the required resources.
 
 Install only one version. Both use the same mod folder and settings; close the game before replacing the folder. 
 
@@ -99,6 +101,7 @@ Automated tests do not replace in-game input and visual testing.
 # Regenerate changed text/font inputs with fontTools.
 py -3.10 -X utf8 tools/prepare_languages.py
 # Generate the small atlas only when icon inputs change (requires Pillow).
+py -3.10 -X utf8 tools/optimize_icon_atlas.py
 py -3.10 -X utf8 tools/prepare_low_memory.py
 ./tools/Build.ps1 -Variant low-memory
 ./tools/Test.ps1 -Variant low-memory

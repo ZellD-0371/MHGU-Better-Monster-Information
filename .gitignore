@@ -16,6 +16,7 @@ preview-settings.json
 !/tools/Test.ps1
 !/tools/Check-Instructions.ps1
 !/tools/check_native.rs
+!/tools/check_resources.rs
 !/tools/package_native.py
 /assets/*
 !/assets/native/
@@ -35,3 +36,7 @@ preview-settings.json
 !/tools/prepare_languages.py
 
 !/conf/FORGE_LICENSE.txt
+
+!/tools/optimize_icon_atlas.py
+
+!/tools/prepare_numbers.py

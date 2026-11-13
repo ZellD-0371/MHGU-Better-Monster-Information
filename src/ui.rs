@@ -34,9 +34,9 @@ pub fn init(){unsafe{
  let ctx=sys::igGetCurrentContext();if ctx==LANGUAGE_CONTEXT&&LANGUAGE_HOOK!=0{return}LANGUAGE_CONTEXT=ctx;LANGUAGE_HOOK=0;
  crate::storage::poll();crate::language::reset();GLYPHS=None;WRAP=None;FONT=None;
  let requested=STATE.with(|s|s.language);let language=switch_language(requested,false)||switch_language(0,false);
- let data=r::init();if crate::language::font_valid(){FONT=imgui::ImFont::load(c"app:/nativeNX/plugins/better-monster-information/languages/font.shared.otf");}
+ if crate::language::font_valid(){FONT=imgui::ImFont::load(c"app:/nativeNX/plugins/better-monster-information/languages/font.shared.otf");}
  let hook=sys::ImGuiContextHook{HookId:0,Type:sys::ImGuiContextHookType::NewFramePre,Owner:0x424d4931,Callback:Some(before_language_frame),UserData:core::ptr::null_mut()};LANGUAGE_HOOK=sys::igAddContextHook(ctx,&hook);
- let font=FONT;let ready=data&&language&&font.is_some()&&LANGUAGE_HOOK!=0&&STATE.with(|s|s.input_ready);
+ let font=FONT;let ready=language&&font.is_some()&&LANGUAGE_HOOK!=0&&STATE.with(|s|s.input_ready);
  STATE.with(|s|s.ready=ready);forge::log::prelude::info!("[monster-info] single-language resources and subset font ready={}",ready);
 }}
 struct Canvas{draw:imgui::DrawList,scale:f32,ox:f32,oy:f32,right_ox:f32}
@@ -55,7 +55,7 @@ impl Canvas{
  }
  fn label(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>,center:bool){let text=text.as_ref();
   let mut clipped=String::new();let full=self.measure(size,text);
-  let text=if full>w{for ch in text.chars(){clipped.push(ch);if self.measure(size,&format!("{}…",clipped))>w{clipped.pop();break}}clipped.push('…');clipped.as_str()}else{text};
+  let text=if full>w{let available=(w-self.measure(size,"…")).max(0.);let end=crate::layout::fitting_prefix(text,available,|ch|glyph(self.pixels(size),ch).advance/self.scale);clipped.push_str(&text[..end]);clipped.push('…');clipped.as_str()}else{text};
   self.raw_label(x,y,w,h,size,col,text,center,0.);
  }
  fn raw_label(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>,center:bool,offset:f32){let text=text.as_ref();
@@ -69,16 +69,16 @@ impl Canvas{
  fn right(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>){let text=text.as_ref();let mw=self.measure(size,text).min(w);self.label(x+w-mw,y,mw,h,size,col,text,false);}
  fn paragraph(&self,x:f32,y:f32,w:f32,h:f32,size:f32,col:u32,text:impl AsRef<str>){let text=text.as_ref();
   if crate::perf::legacy(){self.paragraph_uncached(x,y,w,h,size,col,text);return}
-  let key=(String::from(text),self.scale.to_bits(),size.to_bits(),w.to_bits());
+  let dims=(self.scale.to_bits(),size.to_bits(),w.to_bits());
   unsafe{let cache=&mut*core::ptr::addr_of_mut!(WRAP);
-   if cache.as_ref().is_none_or(|(old,_)|*old!=key){
+   if cache.as_ref().is_none_or(|((old,a,b,c),_)|old!=text||(*a,*b,*c)!=dims){
     let mut rows=Vec::new();let mut line=String::new();
     for paragraph in text.split('\n'){for word in paragraph.split_whitespace(){let candidate=if line.is_empty(){word.into()}else{format!("{} {}",line,word)};
      if self.measure(size,&candidate)<=w{line=candidate;continue}
      if !line.is_empty(){rows.push(core::mem::take(&mut line));}
      for ch in word.chars(){if self.measure(size,&format!("{}{}",line,ch))>w{rows.push(core::mem::take(&mut line));}line.push(ch);}
     }if !line.is_empty(){rows.push(core::mem::take(&mut line));}}
-    *cache=Some((key,rows));
+    *cache=Some(((String::from(text),dims.0,dims.1,dims.2),rows));
    }
    if let Some((_,rows))=cache.as_ref(){let step=size*0.93;for(i,line)in rows.iter().enumerate(){let py=y+i as f32*step;if py+step>y+h{break}self.raw_label(x,py,w,step,size,col,line,false,0.);}}
   }
@@ -128,9 +128,8 @@ impl Canvas{
   if offset+crate::layout::PAGE_ROWS<total{self.draw.add_triangle_filled(self.p(x-1.,y+h+5.),self.p(x+8.,y+h+5.),self.p(x+3.5,y+h+11.),INK);}
  }
 }
-fn t(id:u32,s:&State)->String{r::text(id,s.language)}
-fn number(v:f32)->String{if v<0.{String::from("—")}else if v==v as u32 as f32{format!("{}",v as u32)}else{let scaled=(v*100000.+0.5) as u32;let fraction=scaled%100000;let mut tail=format!("{}",fraction);while tail.len()<5{tail.insert(0,'0');}let mut out=format!("{}.{}",scaled/100000,tail);while out.ends_with('0'){out.pop();}out}}
-fn percent(v:i16)->String{if v==-1{String::from("—")}else if v==-2{String::from("…")}else if v%100==0{format!("{}%",v/100)}else{format!("{}.{}{}%",v/100,(v%100)/10,v%10)}}
+fn t(id:u32,s:&State)->alloc::rc::Rc<str>{r::text(id,s.language)}
+use crate::numeric::{number,percent};
 fn weak_table(cv:&Canvas,s:&State){
  let m=&g::MONSTERS[s.id as usize];let(w,h)=g::DIAGRAMS[s.id as usize];let dx=42.+(298.-w as f32)*0.5;let dy=250.+(215.-h as f32)*0.5;
  if !r::diagram(cv.draw,s.id,cv.p(dx,dy),cv.p(dx+w as f32,dy+h as f32)){cv.label(42.,320.,298.,50.,24.,INK,t(g::UI_NODIAGRAM[0],s),true);}
@@ -162,9 +161,9 @@ fn ordinary_table(cv:&Canvas,s:&State){
  let m=&g::MONSTERS[s.id as usize];let rows=if s.tab==1{&g::AILMENTS[m.ail as usize..(m.ail+m.ail_len) as usize]}else{&g::TRAPS[m.trap as usize..(m.trap+m.trap_len) as usize]};
  let widths:&[f32]=if s.tab==1{&[162.,130.,115.,130.,160.,119.]}else{&[212.,160.,148.,148.,148.]};
  let headers:&[u32]=if s.tab==1{&[g::UI_TABS[1],g::UI_INITIAL[0],g::UI_INCREASE[0],g::UI_MAXIMUM[0],g::UI_DURATION[0],g::UI_DAMAGE[0]]}else{&[g::UI_TABS[2],g::UI_EFFECTIVE[0],g::UI_NORMAL[0],g::UI_ENRAGED[0],g::UI_FATIGUED[0]]};
- cv.rect(68.,226.,816.,37.,0xffa4b7c4);let mut x=68.;for(i,width)in widths.iter().enumerate(){let header=if s.tab==2&&i>=2{format!("{} (s)",t(headers[i],s))}else{t(headers[i],s).into()};cv.label(x+4.,226.,width-8.,37.,20.,INK,&header,true);x+=width;}
+ cv.rect(68.,226.,816.,37.,0xffa4b7c4);let mut x=68.;for(i,width)in widths.iter().enumerate(){let header=if s.tab==2&&i>=2{format!("{} (s)",t(headers[i],s))}else{t(headers[i],s).as_ref().into()};cv.label(x+4.,226.,width-8.,37.,20.,INK,&header,true);x+=width;}
  for(i,row)in rows.iter().enumerate(){let y=268.+i as f32*34.;cv.line(68.,y+33.,884.,y+33.,LINE,1.);cv.icon(row.icon as usize,76.,y+6.,22.,0xffffffff);cv.label(102.,y,widths[0]-39.,33.,20.,INK,t(row.name,s),false);let mut x=68.+widths[0];
-  for col in 1..widths.len(){let value=if s.tab==2&&col==1{t(if row.values[0]>0.{g::UI_EFFECTIVE[0]}else{g::UI_INEFFECTIVE[0]},s).into()}else{number(row.values[col-1])};cv.label(x+4.,y,widths[col]-8.,33.,24.,INK,&value,true);x+=widths[col];}
+  for col in 1..widths.len(){if s.tab==2&&col==1{cv.label(x+4.,y,widths[col]-8.,33.,24.,INK,t(if row.values[0]>0.{g::UI_EFFECTIVE[0]}else{g::UI_INEFFECTIVE[0]},s),true);}else{cv.label(x+4.,y,widths[col]-8.,33.,24.,INK,number(row.values[col-1]),true);}x+=widths[col];}
  }
 }
 fn material_table(cv:&Canvas,s:&State){
@@ -201,12 +200,12 @@ fn ranks(cv:&Canvas,s:&State){
  for(i,rank)in s.ranks.iter().enumerate().skip(top).take(6){let py=y+4.+(i-top) as f32*38.;if i==s.rank_cursor{cv.rect(602.,py,280.,38.,0xff1681a0);cv.cursor(608.,py+19.,false,0.);}cv.label(632.,py,238.,38.,24.,WHITE,t(g::RANK_NAMES[*rank as usize],s),false);}
 }
 fn forms(cv:&Canvas,s:&State){
- let forms=s.forms();if forms.len()<2{return}
+ if !s.has_forms(){return}
  cv.rect(42.,180.,298.,34.,0xff98b4c5);cv.border(42.,180.,298.,34.,0xff3d5069);
  cv.icon(g::PROMPTS[s.layout][5],50.,185.,24.,if s.mode==1{0x66ffffff}else{0xffffffff});
  cv.label(80.,180.,240.,34.,20.,INK,t(g::MONSTERS[s.id as usize].name,s),false);
  cv.draw.add_triangle_filled(cv.p(325.,194.),cv.p(335.,194.),cv.p(330.,200.),INK);
- if s.mode!=3{return}
+ if s.mode!=3{return}let forms=s.forms();
  let w=forms.iter().map(|&id|cv.measure(24.,t(g::MONSTERS[id as usize].name,s))+64.).fold(298_f32,f32::max).min(600.);
  cv.rect(42.,218.,w,forms.len() as f32*38.+8.,0xff292e31);cv.border(42.,218.,w,forms.len() as f32*38.+8.,GOLD);
  for(i,&id)in forms.iter().enumerate(){let y=222.+i as f32*38.;if i==s.form_cursor{cv.rect(46.,y,w-8.,38.,0xff1681a0);cv.cursor(52.,y+19.,false,0.);}cv.label(76.,y,w-48.,38.,24.,WHITE,t(g::MONSTERS[id as usize].name,s),false);}
@@ -223,9 +222,14 @@ fn screen(cv:&Canvas,s:&State){
   // Selecting a material owns input, so its existing panels may cover the native list.
   let rc=cv.right_canvas();rc.panel(934.,44.,326.,52.);rc.label(950.,44.,294.,52.,27.,GOLD,t(g::UI_DETAIL[0],s),false);material_detail(&rc,s);
  }
- ranks(cv,s);forms(cv,s);cv.bar(749.,g::PROMPTS[s.layout][1],t(g::UI_BACK[0],s));if matches!(s.mode,2|3)||s.mode==0&&s.interactive(){cv.bar(579.,g::PROMPTS[s.layout][0],t(g::UI_ENTER[0],s));}if s.mode==0&&s.forms().len()>1{cv.form_bar(s);}
+ ranks(cv,s);forms(cv,s);cv.bar(749.,g::PROMPTS[s.layout][1],t(g::UI_BACK[0],s));if matches!(s.mode,2|3)||s.mode==0&&s.interactive(){cv.bar(579.,g::PROMPTS[s.layout][0],t(g::UI_ENTER[0],s));}if s.mode==0&&s.has_forms(){cv.form_bar(s);}
 }
 pub fn render(){
+ let base=crate::BASE.load(core::sync::atomic::Ordering::Acquire);
+ let notes_open=crate::native::notes_open(base);
+ r::maintain_diagram(notes_open);
+ // Preload on native notes pages too, before the additional page needs icons.
+ r::maintain_icons(notes_open&&STATE.with(|s|s.ready&&s.enabled),imgui::get_io().DeltaTime);
  let visible=STATE.with(|s|s.visible&&s.ready);if !visible{return}if forge::graphics::Graphics::is_menu_visible(){return}
  let(id,tab)=STATE.with(|s|(s.id,s.tab));if tab==0{r::load_diagram(id);}let Some(cv)=Canvas::new()else{return};STATE.with(|s|screen(&cv,s));
 }

@@ -8,6 +8,8 @@ Push-Location (Join-Path $PSScriptRoot '..')
 try {
     py -3.10 -X utf8 tools/prepare_languages.py --check
     if ($LASTEXITCODE -ne 0) { throw 'Language/font resources need regeneration' }
+    py -3.10 -X utf8 tools/prepare_numbers.py --check
+    if ($LASTEXITCODE -ne 0) { throw 'Numeric resources need regeneration' }
     $env:BMI_VARIANT=$Variant
     $env:PATH='D:\Utils\devkitPro\devkitARM\bin;'+$env:PATH
     $env:CARGO_TARGET_ARMV7A_NONE_EABI_LINKER='D:\Utils\devkitPro\devkitARM\bin\arm-none-eabi-gcc.exe'

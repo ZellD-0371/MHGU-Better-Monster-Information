@@ -25,7 +25,7 @@ unsafe fn filter(index:usize,state:u32,id:u32){unsafe{
  let ry=read(state+28) as i32;if ry>14000{raw|=1<<21}if ry < -14000{raw|=1<<23}
  let menu=forge::graphics::Graphics::is_menu_visible();
  if menu{WAIT_NEUTRAL.store(true,Ordering::Release);EVENTS.store(0,Ordering::Release);HELD.store(0,Ordering::Release);PREVIOUS.store(raw,Ordering::Release);return}
- let (active,mode,opening)=STATE.with(|s|(s.visible&&s.ready&&s.input_ready,s.mode,s.mode==0&&((s.interactive()&&raw&1!=0)||(s.tab==3&&s.ranks.len()>1&&raw&4!=0)||(raw&8!=0&&s.forms().len()>1))));
+ let (active,mode,opening)=STATE.with(|s|(s.visible&&s.ready&&s.input_ready,s.mode,s.mode==0&&((s.interactive()&&raw&1!=0)||(s.tab==3&&s.ranks.len()>1&&raw&4!=0)||(raw&8!=0&&s.has_forms()))));
  let waiting=WAIT_NEUTRAL.load(Ordering::Acquire);
  if waiting&&raw==0&&read(state+24)==0&&read(state+28)==0{WAIT_NEUTRAL.store(false,Ordering::Release);}
  let previous=PREVIOUS.swap(raw,Ordering::AcqRel);let press=raw&!previous;
