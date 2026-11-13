@@ -1,14 +1,20 @@
 """Create a self-contained Forge mod, without changing any other installed mod."""
 from pathlib import Path
-import shutil,zipfile,json,re
+import shutil,zipfile,json,re,argparse,hashlib
 ROOT=Path(__file__).resolve().parents[1]
 def main():
-    target=ROOT/'dist/native/Better-Monster-Information/romfs/nativeNX/plugins'
+    parser=argparse.ArgumentParser();parser.add_argument('--variant',choices=['standard','low-memory'],default='standard');variant=parser.parse_args().variant
+    built=ROOT/'dist/build'/variant
+    audit=json.loads((built/'build.json').read_text(encoding='utf-8-sig'))
+    binary=built/'better_monster_information.nro'
+    assert audit['variant']==variant and audit['sha256'].lower()==hashlib.sha256(binary.read_bytes()).hexdigest()
+    target=ROOT/('dist/native' if variant=='standard' else 'dist/native-low')/'Better-Monster-Information/romfs/nativeNX/plugins'
     target.mkdir(parents=True,exist_ok=True)
-    shutil.copy2(ROOT/'better_monster_information.nro',target)
+    shutil.copy2(binary,target)
     assets=target/'better-monster-information';assets.mkdir(exist_ok=True)
     for name in ['monster-text.bin','monster-icons.rgba']:
-        shutil.copy2(ROOT/'assets/native'/name,assets/name)
+        source=ROOT/('assets/native-low' if variant=='low-memory' and name=='monster-icons.rgba' else 'assets/native')/name
+        shutil.copy2(source,assets/name)
     shutil.copy2(ROOT/'assets/NotoSansCJKkr-Regular.otf',assets/'NotoSansCJKkr-Regular.otf')
     (assets/'NOTO_LICENSE.txt').unlink(missing_ok=True)
     shutil.copy2(ROOT/'assets/NOTO_LICENSE.txt',assets/'OFL.md')
@@ -21,7 +27,8 @@ def main():
     manifest=(ROOT/'Cargo.toml').read_text(encoding='utf-8')
     package=manifest.split('[package]',1)[1].split('[',1)[0]
     version=re.search(r'^version\s*=\s*"([^"]+)"',package,re.M).group(1)
-    archive=ROOT/f'dist/Better-Monster-Information_v{version}.zip'
+    suffix='_LowMemory' if variant=='low-memory' else ''
+    archive=ROOT/f'dist/Better-Monster-Information{suffix}_v{version}.zip'
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
         for file in sorted(mod.rglob('*')):
             if file.is_file():z.write(file,file.relative_to(mod.parent))

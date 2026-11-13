@@ -27,3 +27,6 @@ preview-settings.json
 /docs/*
 !/docs/screenshots/
 !/docs/screenshots.md
+
+!/assets/native-low/
+!/tools/prepare_low_memory.py

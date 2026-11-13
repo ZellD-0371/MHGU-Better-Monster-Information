@@ -47,6 +47,13 @@ mods/
                └─ parts/
 ```
 
+### Standard / Low Memory
+
+- Standard: `Better-Monster-Information_vX.X.X.zip` — original icon atlas and full-resolution body diagrams.
+- Low Memory: `Better-Monster-Information_LowMemory_vX.X.X.zip` — icons capped at 32px in a 2MiB atlas; diagrams scaled at runtime to a maximum 384×256 canvas.
+
+Install only one version. Both use the same mod folder and settings; close the game before replacing the folder. Low Memory uses a smaller dedicated atlas, not direct sharing of native game textures. Source diagrams remain included: the goal is runtime memory reduction rather than a smaller download. Recomp only; in-game visual and stability testing is still required.
+
 ## Usage
 
 ### Viewing monster information
@@ -85,6 +92,15 @@ py -3.10 -X utf8 tools/package_native.py
 The outputs are `better_monster_information.nro`, `dist/native/Better-Monster-Information`, and `dist/Better-Monster-Information_vX.X.X.zip`. Check the devkitARM path in the build script and adjust it for your environment.
 
 Automated tests do not replace in-game input and visual testing.
+
+
+```powershell
+# Generate the small atlas only when icon inputs change (requires Pillow).
+py -3.10 -X utf8 tools/prepare_low_memory.py
+./tools/Build.ps1 -Variant low-memory
+./tools/Test.ps1 -Variant low-memory
+py -3.10 -X utf8 tools/package_native.py --variant low-memory
+```
 
 ## Repository structure
 

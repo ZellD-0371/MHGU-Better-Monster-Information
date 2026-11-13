@@ -1,6 +1,8 @@
 #![no_std]
 extern crate alloc;
-mod native;mod data;mod generated;mod model;mod resources;mod controller;mod ui;mod storage;mod layout;mod history;mod history_format;mod perf;
+mod native;mod data;
+#[cfg(not(bmi_low_memory))]mod generated;
+#[cfg(bmi_low_memory)]#[path="generated_low.rs"]mod generated;mod model;mod resources;mod controller;mod ui;mod storage;mod layout;mod history;mod history_format;mod perf;
 use core::{cell::UnsafeCell,ffi::c_void,sync::atomic::{AtomicBool,AtomicU32,Ordering}};
 use forge::log::prelude::{info,error};
 static BASE:AtomicU32=AtomicU32::new(0);

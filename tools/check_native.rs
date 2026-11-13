@@ -1,7 +1,8 @@
 extern crate alloc;
 #[path="../src/layout.rs"]mod layout;
 #[path="../src/data.rs"]mod data;
-#[path="../src/generated.rs"]mod generated;
+#[cfg(not(bmi_low_memory))]#[path="../src/generated.rs"]mod generated;
+#[cfg(bmi_low_memory)]#[path="../src/generated_low.rs"]mod generated;
 #[path="../src/model.rs"]mod model;
 #[path="../src/history_format.rs"]mod history_format;
 mod resources{
@@ -39,3 +40,5 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
 
 #[test]fn deviant_interval_hunts_disabled_but_progression_kept(){let mut p=high();p.hunted.fill(0);p.flags.fill(u32::MAX);p.cleared.fill(255);for q in 40101..=40103{let index=generated::QUESTS.iter().find(|&&(id,_)|id==q).unwrap().1 as usize;p.cleared[index/8]&=!(1<<(index%8));}assert!(rank_open(60,4,&p));for rank in 4..=12{assert_eq!(rank_open(60,rank,&p),rank_unlocked(60,rank,&p));}assert!(!rank_open(60,12,&Progress::EMPTY));}
 #[test]fn monster_change_preserves_added_page_across_different_page_counts(){assert_eq!(layout::extra_page_on_monster_change(true,0,34,3,4),Some(3));assert_eq!(layout::extra_page_on_monster_change(true,34,0,2,3),Some(2));assert_eq!(layout::extra_page_on_monster_change(true,34,35,3,4),Some(3));assert_eq!(layout::extra_page_on_monster_change(false,0,34,3,4),None);assert_eq!(layout::extra_page_on_monster_change(true,34,34,3,4),None);assert_eq!(layout::extra_page_on_monster_change(true,0,34,3,3),None);}
+
+#[test]fn atlas_variant_size_and_sprite_bounds(){let p=if cfg!(bmi_low_memory){"assets/native-low/monster-icons.rgba"}else{"assets/native/monster-icons.rgba"};assert_eq!(std::fs::metadata(p).unwrap().len(),(2048*generated::ATLAS_HEIGHT*4) as u64);if cfg!(bmi_low_memory){assert!(generated::ATLAS_HEIGHT<=256);}for s in &generated::SPRITES{assert!(s.w>0&&s.h>0&&s.x as usize+s.w as usize<=2048&&s.y as usize+s.h as usize<=generated::ATLAS_HEIGHT);if cfg!(bmi_low_memory){assert!(s.w<=32&&s.h<=32);}}}

@@ -48,6 +48,13 @@ mods/
                └─ parts/
 ```
 
+### 일반용 / 저사양용
+
+- 일반용: `Better-Monster-Information_vX.X.X.zip` — 기존 아이콘과 원본 해상도 부위 그림.
+- 저사양용: `Better-Monster-Information_LowMemory_vX.X.X.zip` — 최대 32px 아이콘 아틀라스(2MiB)와 실행 중 축소 부위 그림(최대 384×256).
+
+두 버전은 같은 모드 폴더와 설정을 사용합니다. 하나만 설치하고, 변경 시 게임을 종료한 뒤 해당 폴더를 교체하세요. 저사양용은 게임 텍스처 직접 공유가 아니라 작은 별도 아틀라스를 사용합니다. 원본 그림 파일은 그대로 포함하므로 ZIP 용량보다 실행 중 메모리 절감이 목적입니다. Recomp 전용이며 게임 내 화질·안정성은 별도 검수가 필요합니다.
+
 ## 사용 방법
 
 ### 목록 확인
@@ -86,6 +93,15 @@ py -3.10 -X utf8 tools/package_native.py
 결과는 `better_monster_information.nro`, `dist/native/Better-Monster-Information`, `dist/Better-Monster-Information_vX.X.X.zip`에 생성됩니다. 빌드 스크립트의 devkitARM 경로는 사용 환경에 맞춰 확인하세요.
 
 자동 검사는 실제 게임의 조작·화면 검수를 대신하지 않습니다.
+
+
+```powershell
+# Generate the small atlas only when icon inputs change (requires Pillow).
+py -3.10 -X utf8 tools/prepare_low_memory.py
+./tools/Build.ps1 -Variant low-memory
+./tools/Test.ps1 -Variant low-memory
+py -3.10 -X utf8 tools/package_native.py --variant low-memory
+```
 
 ## 저장소 구성
 

@@ -42,7 +42,7 @@ pub fn text(id:u32,lang:usize)->&'static str{unsafe{
     let end=rest.iter().position(|&b|b==0).unwrap_or(0);
     core::str::from_utf8(&rest[..end]).unwrap_or("—")
 }}
-pub static DIAGRAM_MODE:core::sync::atomic::AtomicU32=core::sync::atomic::AtomicU32::new(0);
+pub static DIAGRAM_MODE:core::sync::atomic::AtomicU32=core::sync::atomic::AtomicU32::new(if cfg!(bmi_low_memory){2}else{0});
 pub static DIAGRAM_TRACE:core::sync::atomic::AtomicBool=core::sync::atomic::AtomicBool::new(false);
 static mut TRACE:Option<alloc::string::String>=None;
 static mut LAST_STATUS:i32=-1;
@@ -82,16 +82,18 @@ pub fn load_diagram(id:u16){unsafe{
  let(tex,reference,fresh)=if let Some((tex,reference,_))=DIAGRAM{(tex,reference,false)}else{
   stage(&alloc::format!("allocate CPU texture bytes={} canvas={}x{} (source pixels preserved)",tw*th*4,tw,th));
   let tex=sys::ImTextureData_ImTextureData();if tex.is_null(){sys::igImFileClose(file);stage("texture object allocation failed");return}
-  let pixels=sys::igMemAlloc(tw*th*4) as *mut u8;
+  // Use Forge's texture API: Recomp marshals host pixels into guest memory.
+  // Assigning a guest allocation directly to Pixels bypasses that ownership bridge.
+  sys::ImTextureData_Create(tex,sys::ImTextureFormat::RGBA32,tw as i32,th as i32);
+  let pixels=sys::ImTextureData_GetPixels(tex) as *mut u8;
   if pixels.is_null(){sys::ImTextureData_destroy(tex);sys::igImFileClose(file);stage("CPU pixels allocation failed");return}
-  (*tex).Format=sys::ImTextureFormat::RGBA32;(*tex).Width=tw as i32;(*tex).Height=th as i32;(*tex).BytesPerPixel=4;(*tex).Pixels=pixels;
   let rects=sys::igMemAlloc(core::mem::size_of::<sys::ImTextureRect>()) as *mut sys::ImTextureRect;
   if rects.is_null(){sys::ImTextureData_destroy(tex);sys::igImFileClose(file);stage("update rectangle allocation failed");return}
   (*tex).Updates.Data=rects;(*tex).Updates.Capacity=1;(*tex).Updates.Size=0;
   sys::ImTextureData_SetStatus(tex,sys::ImTextureStatus::WantCreate);
   (tex,sys::ImTextureData_GetTexRef(tex),true)
  };
- let pixels=(*tex).Pixels;core::ptr::write_bytes(pixels,0,tw*th*4);
+ let pixels=sys::ImTextureData_GetPixels(tex) as *mut u8;if pixels.is_null(){sys::igImFileClose(file);stage("CPU pixel mapping failed");return}core::ptr::write_bytes(pixels,0,tw*th*4);
  let(dw,dh)=if DIAGRAM_MODE.load(core::sync::atomic::Ordering::Relaxed)==2{let scale=(tw as f32/w as f32).min(th as f32/h as f32).min(1.);(((w as f32*scale) as usize).max(1),((h as f32*scale) as usize).max(1))}else{(w as usize,h as usize)};
  // Stream rows instead of keeping a second full RGBA image in memory.
  let mut row=alloc::vec::Vec::new();if row.try_reserve_exact(w as usize*4).is_err(){sys::igImFileClose(file);if fresh{sys::ImTextureData_destroy(tex);}stage("row allocation failed");return}row.resize(w as usize*4,0u8);
