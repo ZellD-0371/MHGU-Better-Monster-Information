@@ -16,9 +16,7 @@ Monster Hunter Generations Ultimate의 헌터 노트에 몬스터 정보 페이�
 ## 지원 환경
 
 - MHGU 글로벌 버전 1.4.0
-- MHGU Recomp
-
-현재 에뮬레이터는 지원하지 않습니다.
+- MHGU Recomp 혹은 `Forge 1.5.1` 이 설치된 에뮬레이터
 
 ## 주요 기능
 
@@ -53,6 +51,9 @@ mods/
 
 - 일반용: `Better-Monster-Information_vX.X.X.zip` — 원본 아이콘 화질을 유지한 4MiB 아틀라스와 원본 해상도 부위 그림.
 - 저사양용: `Better-Monster-Information_LowMemory_vX.X.X.zip` — 최대 32px 아이콘 아틀라스(약 1.06MiB)와 미리 축소한 개별 부위 그림(최대 384×256).
+
+> [!IMPORTANT]
+> 에뮬레이터 유저는 **저사양용**을 사용해주세요.
 
 두 버전 모두 몬스터 도감을 열 때 아이콘 아틀라스를, 필요할 때 부위 그림을 불러옵니다. 도감을 닫으면 진행 중인 화면 처리가 끝나는 대로 두 텍스처와 픽셀 버퍼를 해제하며, 다시 열면 필요한 리소스를 다시 불러옵니다.
 
