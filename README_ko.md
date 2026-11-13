@@ -93,10 +93,9 @@ py -3.10 -X utf8 tools/package_native.py
 
 ## 출처 및 크레딧
 
-부위 그림과 육질·소재 등의 데이터는 직접 제작하거나 독립적으로 게임에서 추출한 자료가 아닙니다. [MHXX Dex 웹 포트](https://mhxx-dex.pages.dev/)와 Ping’s MHXX Dex 계열 자료를 사용했습니다. 이 모드에서 추가한 작업은 게임 내 UI·입력 연동, 자료의 표시용 변환 및 선택 부위 강조 표시입니다. 플레이어 진행도와 소지 수량은 게임에서 별도로 읽습니다.
+몬스터 부위 도식과 육질 및 소재 데이터는 Ping의 MHXX Dex를 기반으로 제작된 MHXX Dex 웹 포트에서 가져왔습니다.
 
 - **Ping** — 원본 MHXX Dex
 - **fabric_soul** — MHXX Dex 웹 포트
 - 웹 포트가 명시한 기여자: breakds, 掌机迷, MHVuze, svanheulen, ACG汉化组, dasding and team, 팀 갈무리, Zeff and team. 이 목록이 각 부위 그림의 개별 작성자를 확정하는 것은 아닙니다.
-- **Noto Sans CJK KR** — SIL Open Font License 1.1
 - **mhgu-forge / forge-rs** — Fexty, MIT License
