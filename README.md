@@ -52,7 +52,7 @@ mods/
 - Standard: `Better-Monster-Information_vX.X.X.zip` — original icon atlas and full-resolution body diagrams.
 - Low Memory: `Better-Monster-Information_LowMemory_vX.X.X.zip` — icons capped at 32px in a 2MiB atlas; diagrams scaled at runtime to a maximum 384×256 canvas.
 
-Install only one version. Both use the same mod folder and settings; close the game before replacing the folder. Low Memory uses a smaller dedicated atlas, not direct sharing of native game textures. Source diagrams remain included: the goal is runtime memory reduction rather than a smaller download. Recomp only; in-game visual and stability testing is still required.
+Install only one version. Both use the same mod folder and settings; close the game before replacing the folder. 
 
 ## Usage
 
