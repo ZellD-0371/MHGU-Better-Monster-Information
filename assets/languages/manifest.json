@@ -1,5 +1,5 @@
 {
-  "inputs_sha256": "294bd3a7b4e8cc9a1097c1845bb74e2f6338785c8fcd47b72706a8342f5bc99d",
+  "inputs_sha256": "3a2fcd06d207d470e9f16280b3d9fc4bf53d6a2570c48a1e8a2f331663f46ee7",
   "codes": [
     "en",
     "zh-Hans",
@@ -12,7 +12,7 @@
     "es"
   ],
   "count": 4698,
-  "characters": 3924,
+  "characters": 3925,
   "original_font_bytes": 16433112,
   "files": {
     "text.en.bin": {
@@ -52,8 +52,8 @@
       "crc32": 2904762464
     },
     "font.shared.otf": {
-      "bytes": 1783016,
-      "crc32": 2542047466
+      "bytes": 1783580,
+      "crc32": 115197130
     }
   }
 }

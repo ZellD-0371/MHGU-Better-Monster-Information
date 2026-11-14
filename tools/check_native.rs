@@ -2,6 +2,66 @@ extern crate alloc;
 #[path="../src/numeric.rs"]mod numeric;
 #[path="../src/retry.rs"]mod retry;
 #[path="../src/diagram_lifetime.rs"]mod diagram_lifetime;
+#[path="../src/settings_labels.rs"]mod settings_labels;
+
+#[test]fn logging_defaults_off_and_old_settings_remain_compatible(){
+ let mut s=State::new();assert!(!s.logging);s.load_preferences("[BetterMonsterInformation]\nlanguage=4\nlayout=2\n");
+ assert_eq!((s.language,s.layout,s.logging),(4,2,false));
+ s.load_preferences("logging=2\nlogging=-1\nlogging=true\nlanguage=9\nlayout=3\n");assert_eq!((s.language,s.layout,s.logging),(4,2,false));
+ for lang in 0..9{for layout in 0..3{for enabled in [false,true]{s.language=lang;s.layout=layout;s.logging=enabled;let mut restored=State::new();restored.load_preferences(&s.encode_preferences());assert_eq!((restored.language,restored.layout,restored.logging),(lang,layout,enabled));}}}
+}
+#[test]fn layout_logging_is_opt_in_and_resumes_with_current_values(){
+ let mut log=layout::ViewportLog::NEW;let key=[1280,720,1,1,1,1280,720,1280];
+ for _ in 0..600{assert!(!log.record(false,key));}
+ assert!(log.record(true,key));assert!(!log.record(true,key));assert!(!log.record(false,key));assert!(log.record(true,key));
+ let mut next=key;next[0]=1920;assert!(!log.record(false,next));assert!(log.record(true,next));
+}
+#[test]fn logging_checkbox_has_all_nine_translations(){
+ let labels=settings_labels::LOGGING.map(|s|s.to_str().unwrap());assert_eq!(labels[0],"Enable logging");assert_eq!(labels[4],"로그 기록 활성화");
+ for(i,label)in labels.iter().enumerate(){assert!(!label.is_empty());assert!(!labels[..i].contains(label));}
+}
+
+#[test]fn handheld_and_docked_offscreen_hud_fall_back_to_screen(){
+ use layout::{resolve_viewport,viewport_fits,Placement};
+ for(w,h)in [(1280.,720.),(1920.,1080.)]{
+  let(normal,p)=resolve_viewport(w,h,Some((w as u32,h as u32,1280))).unwrap();assert_eq!(p,Placement::Hud);
+  for uw in [1920,2560,7200]{
+   assert!(layout::hud_viewport(w,h,w as u32,h as u32,uw).is_none());
+   let(v,p)=resolve_viewport(w,h,Some((w as u32,h as u32,uw))).unwrap();assert_eq!(p,Placement::InvalidHud);assert!(viewport_fits(v,w,h));
+   assert_eq!((v.scale,v.ox,v.right_ox,v.oy),(normal.scale,normal.ox,normal.right_ox,normal.oy));
+  }
+ }
+}
+#[test]fn viewport_safety_preserves_center_edges_and_fixed_aspect(){
+ use layout::{resolve_viewport,viewport_fits,Placement};
+ for(w,h,rw,rh,uw,scale,left,right,top)in [
+  (1680.,720.,1680,720,1680,1.,0.,400.,0.),
+  (1680.,720.,1280,720,1280,1.,200.,200.,0.),
+  (3440.,1440.,3440,1440,1720,2.,0.,880.,0.),
+  (1792.,504.,1792,504,2560,0.7,0.,896.,0.),
+  (1440.,900.,1440,900,1280,1.125,0.,0.,0.),
+  (1920.,1200.,1920,1200,1280,1.5,0.,0.,0.),
+  (1920.,1080.,1280,1024,1280,1.0546875,285.,285.,0.),
+ ]{
+  let(v,p)=resolve_viewport(w,h,Some((rw,rh,uw))).unwrap();assert_eq!(p,Placement::Hud);assert!(viewport_fits(v,w,h));
+  for(a,b)in [(v.scale,scale),(v.ox,left),(v.right_ox,right),(v.oy,top)]{assert!((a-b).abs()<0.01,"{a} != {b}");}
+ }
+}
+#[test]fn viewport_safety_handles_invalid_inputs_and_all_fallbacks(){
+ use layout::{resolve_viewport,viewport_fits,Placement};
+ for(w,h)in [(1280.,720.),(1920.,1080.),(3840.,2160.),(3440.,1440.),(1440.,900.),(1024.,768.),(640.,360.)]{
+  for hud in [None,Some((0,720,1280)),Some((1280,0,1280)),Some((u32::MAX,720,1280)),Some((1280,720,u32::MAX)),Some((1280,720,0))]{
+   let(v,p)=resolve_viewport(w,h,hud).unwrap();assert_ne!(p,Placement::Hud);assert!(viewport_fits(v,w,h));
+  }
+ }
+ for(w,h)in [(0.,720.),(1280.,0.),(-1280.,720.),(f32::NAN,720.),(1280.,f32::INFINITY)]{assert!(resolve_viewport(w,h,Some((1280,720,1280))).is_none());}
+}
+#[test]fn viewport_logs_once_per_input_change_and_visible_session(){
+ let mut log=layout::ViewportLog::NEW;let key=[1280f32.to_bits(),720f32.to_bits(),1f32.to_bits(),1f32.to_bits(),1,1280,720,1280];
+ assert!(log.changed(key));for _ in 0..600{assert!(!log.changed(key));}
+ let mut bad=key;bad[7]=1920;assert!(log.changed(bad));assert!(!log.changed(bad));
+ log.reset();assert!(log.changed(bad));assert!(!log.changed(bad));
+}
 
 #[test]fn diagram_releases_on_close_only_after_backend_completion(){
  use diagram_lifetime::{Lifetime,Status as S,Action as A};let mut life=Lifetime::NEW;

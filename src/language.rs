@@ -8,7 +8,7 @@ impl Shared{fn with<R>(&self,f:impl FnOnce(&mut Store)->R)->R{while self.lock.co
 pub fn current()->Option<usize>{DATA.with(|s|s.active.as_ref().map(|p|p.language))}
 pub fn text(id:u32)->Rc<str>{DATA.with(|s|s.text(id))}
 pub fn prepare(lang:usize)->Result<Pack,()>{let code=["en","zh-Hans","zh-Hant","ja","ko","de","fr","it","es"].get(lang).copied().ok_or(())?;let path=CString::new(alloc::format!("app:/nativeNX/plugins/better-monster-information/languages/text.{}.bin",code)).unwrap();let bytes=unsafe{crate::resources::read_file(&path)}.ok_or(())?;Pack::prepare(lang,bytes)}
-pub fn commit(next:Pack){let lang=next.language;let bytes=next.len();let old=DATA.with(|s|s.commit(next));drop(old);forge::log::prelude::info!("[monster-info] language={} active text bytes={}; previous pack released",lang,bytes);}
+pub fn commit(next:Pack){let lang=next.language;let bytes=next.len();let old=DATA.with(|s|s.commit(next));drop(old);crate::diagnostic_info!("[monster-info] language={} active text bytes={}; previous pack released",lang,bytes);}
 pub fn reset(){let old=DATA.with(|s|s.reset());drop(old);}
 pub fn font_valid()->bool{unsafe{
  use forge::sys::imgui as sys;let f=sys::igImFileOpen(c"app:/nativeNX/plugins/better-monster-information/languages/font.shared.otf".as_ptr(),c"rb".as_ptr());if f.is_null(){return false}

@@ -73,6 +73,7 @@ Insert로 Forge 설정을 열고 `Plugin UI > Better Monster Information`에서 
 | --- | --- |
 | Language | 지원 언어 9개 중 선택. 기본값 English |
 | Button layout | Nintendo / Xbox / PlayStation. 기본값 Nintendo |
+| 로그 기록 활성화 | 몬스터 이동·리소스·화면 배치 진단 로그 기록. 기본값 꺼짐. 경고·오류는 계속 기록. 선택한 언어로 표시 |
 
 지원 언어: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Italiano, Español
 
@@ -80,7 +81,7 @@ Insert로 Forge 설정을 열고 `Plugin UI > Better Monster Information`에서 
 
 | 파일 | 내용 |
 | --- | --- |
-| `better-monster-information.ini` | 공통 언어 및 버튼 표시 설정 |
+| `better-monster-information.ini` | 공통 언어, 버튼 표시 및 진단 로그 설정 |
 
 Windows Recomp 기본 경로는 `%APPDATA%\MHGURecomp\save\save_0\`입니다. 실행 환경에서 저장 경로를 따로 지정했다면 해당 경로를 사용합니다. 
 

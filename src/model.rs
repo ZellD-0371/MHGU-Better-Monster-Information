@@ -57,13 +57,17 @@ pub struct State{
     pub enabled:bool,pub installed:bool,pub ready:bool,pub input_ready:bool,pub visible:bool,
     pub id:u16,pub native_id:u16,pub form_cursor:usize,pub native_note:u8,pub original_pages:u8,pub mode:u8,pub tab:usize,pub row:usize,pub scroll:usize,
     pub rank:u8,pub ranks:Vec<u8>,pub rank_cursor:usize,pub detail_scroll:usize,pub clock:f32,
-    pub language:usize,pub layout:usize,pub progress:Progress,
+    pub language:usize,pub layout:usize,pub logging:bool,pub progress:Progress,
     pub progress_age:f32,pub stock_age:f32,pub stock_item:Option<u16>,
     pub owned:Option<u32>,
     repeat_direction:i8,repeat_time:f32,
 }
 impl State{
-    pub fn new()->Self{Self{enabled:true,installed:false,ready:false,input_ready:false,visible:false,id:48,native_id:48,form_cursor:0,native_note:34,original_pages:3,mode:0,tab:0,row:0,scroll:0,rank:1,ranks:Vec::new(),rank_cursor:0,detail_scroll:0,clock:0.,language:0,layout:0,progress:Progress::EMPTY,progress_age:1.,stock_age:1.,stock_item:None,owned:None,repeat_direction:0,repeat_time:0.}}
+    pub fn new()->Self{Self{enabled:true,installed:false,ready:false,input_ready:false,visible:false,id:48,native_id:48,form_cursor:0,native_note:34,original_pages:3,mode:0,tab:0,row:0,scroll:0,rank:1,ranks:Vec::new(),rank_cursor:0,detail_scroll:0,clock:0.,language:0,layout:0,logging:false,progress:Progress::EMPTY,progress_age:1.,stock_age:1.,stock_item:None,owned:None,repeat_direction:0,repeat_time:0.}}
+    pub fn load_preferences(&mut self,text:&str){
+        for line in text.lines(){let Some((key,value))=line.split_once('=')else{continue};let Ok(n)=value.trim().parse::<usize>()else{continue};match key.trim(){"language" if n<9=>self.language=n,"layout" if n<3=>self.layout=n,"logging" if n<=1=>self.logging=n==1,_=>{}}}
+    }
+    pub fn encode_preferences(&self)->alloc::string::String{alloc::format!("[BetterMonsterInformation]\nlanguage={}\nlayout={}\nlogging={}\n",self.language,self.layout,self.logging as u8)}
     pub fn form_ids(&self)->impl Iterator<Item=u16>+'_ {
         g::FAMILIES.iter().filter_map(|&(parent,id)|{
             if parent!=self.native_id{return None}

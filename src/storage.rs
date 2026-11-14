@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use core::ffi::{CStr, c_char, c_void};
-use forge::log::prelude::{info, warn};
+use forge::log::prelude::warn;
 
 pub const MAX_BYTES: usize = 8192;
 
@@ -106,7 +106,7 @@ impl Location<'_> {
             self.write_mounted(self.defaults)
                 .map_err(|_| ReadError::Io)?;
             bytes[..self.defaults.len()].copy_from_slice(self.defaults.as_bytes());
-            info!("{}: generated default INI", self.display);
+            crate::diagnostic_info!("{}: generated default INI", self.display);
             return Ok(core::str::from_utf8(&bytes[..self.defaults.len()]).unwrap());
         }
         if code != 0 {
@@ -127,7 +127,7 @@ impl Location<'_> {
             return Err(ReadError::TooLarge);
         }
         let text = core::str::from_utf8(&bytes[..size as usize]).map_err(|_| ReadError::Utf8)?;
-        info!("{}: loaded", self.display);
+        crate::diagnostic_info!("{}: loaded", self.display);
         Ok(text)
     }
 
@@ -186,7 +186,7 @@ impl Location<'_> {
         if code != 0 {
             return self.failed(code, "Could not commit MHGU save INI. See Forge log.");
         }
-        info!("{}: saved", self.display);
+        crate::diagnostic_info!("{}: saved", self.display);
         Ok(())
     }
 
@@ -203,11 +203,11 @@ pub fn poll(){
  if LOADED.load(Ordering::Acquire){return}
  let n=RETRY.fetch_add(1,Ordering::Relaxed);if n%180!=0{return}
  let mut bytes=[0;MAX_BYTES];if let Ok(text)=SETTINGS.read(&mut bytes){
-  crate::STATE.with(|s|{for line in text.lines(){let Some((key,value))=line.split_once('=') else{continue};let Ok(n)=value.trim().parse::<usize>() else{continue};match key.trim(){"profile" if n<=2=>crate::perf::MODE.store(n as u32,Ordering::Relaxed),"language" if n<9=>s.language=n,"layout" if n<3=>s.layout=n,_=>{}}}});
+  crate::STATE.with(|s|{s.load_preferences(text);crate::diagnostics::set_enabled(s.logging);for line in text.lines(){let Some((key,value))=line.split_once('=') else{continue};let Ok(n)=value.trim().parse::<usize>() else{continue};match key.trim(){"profile" if n<=2=>crate::perf::MODE.store(n as u32,Ordering::Relaxed),_=>{}}}});
   LOADED.store(true,Ordering::Release);
  }
 }
 pub fn save_preferences()->bool{
- let text=crate::STATE.with(|s|alloc::format!("[BetterMonsterInformation]\nlanguage={}\nlayout={}\n",s.language,s.layout));
+ let text=crate::STATE.with(|s|s.encode_preferences());
  SETTINGS.save(&text).is_ok()
 }

@@ -60,7 +60,7 @@ unsafe fn free_texture(tex:*mut sys::ImTextureData){unsafe{
 pub fn maintain_diagram(notes_open:bool){unsafe{
  if retire_texture(DIAGRAM.map(|(tex,_,_)|tex),&mut*core::ptr::addr_of_mut!(LIFETIME),notes_open){
   if let Some((tex,_,id))=core::ptr::addr_of_mut!(DIAGRAM).replace(None){
-   free_texture(tex);forge::log::prelude::info!("[monster-info] diagram {} released after notes closed",id);
+   free_texture(tex);crate::diagnostic_info!("[monster-info] diagram {} released after notes closed",id);
   }
  }
 }}
@@ -68,14 +68,14 @@ pub fn maintain_icons(notes_open:bool,dt:f32){unsafe{
  let lifetime=&mut*core::ptr::addr_of_mut!(ICON_LIFETIME);
  if retire_texture(ICONS.map(|(tex,_)|tex),lifetime,notes_open){
   if let Some((tex,_))=core::ptr::addr_of_mut!(ICONS).replace(None){
-   free_texture(tex);forge::log::prelude::info!("[monster-info] icon atlas released after notes closed");
+   free_texture(tex);crate::diagnostic_info!("[monster-info] icon atlas released after notes closed");
   }
  }
  let retry=&mut*core::ptr::addr_of_mut!(ICON_RETRY);retry.tick(dt,notes_open);
  if !notes_open||lifetime.retiring()||core::ptr::addr_of!(ICONS).read().is_some(){return}
  retry.select(0);if !retry.allows(){return}
  if let Some(texture)=texture(c"app:/nativeNX/plugins/better-monster-information/monster-icons.rgba",2048,g::ATLAS_HEIGHT as u16){
-  ICONS=Some(texture);retry.succeeded();forge::log::prelude::info!("[monster-info] icon atlas loaded on demand");
+  ICONS=Some(texture);retry.succeeded();crate::diagnostic_info!("[monster-info] icon atlas loaded on demand");
  }else{retry.failed();forge::log::prelude::warn!("[monster-info] icon atlas load failed; retry limited");}
 }}
 pub fn load_diagram(id:u16){unsafe{

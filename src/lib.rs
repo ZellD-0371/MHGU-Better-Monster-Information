@@ -1,10 +1,10 @@
 #![no_std]
 extern crate alloc;
-mod numeric;mod retry;mod diagram_lifetime;mod language;mod language_pack;mod native;mod data;
+mod numeric;mod retry;mod diagram_lifetime;mod settings_labels;mod diagnostics;mod language;mod language_pack;mod native;mod data;
 #[cfg(not(bmi_low_memory))]mod generated;
 #[cfg(bmi_low_memory)]#[path="generated_low.rs"]mod generated;mod model;mod resources;mod controller;mod ui;mod storage;mod layout;mod history;mod history_format;mod perf;
 use core::{cell::UnsafeCell,ffi::c_void,sync::atomic::{AtomicBool,AtomicU32,Ordering}};
-use forge::log::prelude::{info,error};
+use forge::log::prelude::error;
 static BASE:AtomicU32=AtomicU32::new(0);
 struct Shared{lock:AtomicBool,data:UnsafeCell<Option<model::State>>}
 unsafe impl Sync for Shared{}
@@ -20,7 +20,7 @@ fn main(){
     if !native::install(base){error!("[monster-info] MHGU 1.4.0 signatures rejected; disabled");return}
     if model::REQUIRE_RANK_HUNT&&!history::install(base){error!("[monster-info] rank-history signature rejected; disabled");return}
     let input=controller::install(base);STATE.with(|s|{s.installed=true;s.input_ready=input;});
-    info!("[monster-info] v{} native notes adapter; input capture={}",env!("CARGO_PKG_VERSION"),input);
+    crate::diagnostic_info!("[monster-info] v{} native notes adapter; input capture={}",env!("CARGO_PKG_VERSION"),input);
 }
 
 #[unsafe(no_mangle)]

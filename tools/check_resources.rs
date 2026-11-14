@@ -8,15 +8,18 @@ extern crate self as forge;
 #[cfg(bmi_low_memory)]#[path="../src/generated_low.rs"]mod generated;
 #[path="../src/retry.rs"]mod retry;
 #[path="../src/diagram_lifetime.rs"]mod diagram_lifetime;
+#[path="../src/diagnostics.rs"]mod diagnostics;
 #[path="../src/resources.rs"]mod resources;
 mod language{pub fn text(_:u32)->alloc::rc::Rc<str>{"test".into()}}
 #[macro_export]macro_rules! test_log{($($arg:tt)*)=>{let _=format_args!($($arg)*);}}
-pub mod log{pub mod prelude{pub use crate::test_log as info;pub use crate::test_log as warn;}}
+#[macro_export]macro_rules! test_info{($($arg:tt)*)=>{{crate::INFO_CALLS.fetch_add(1,crate::Ordering::Relaxed);let _=format_args!($($arg)*);}}}
+pub mod log{pub mod prelude{pub use crate::test_info as info;pub use crate::test_log as warn;}}
 use std::sync::{Mutex,atomic::{AtomicUsize,Ordering}};
 static REGISTERED:Mutex<Vec<usize>>=Mutex::new(Vec::new());
 static ALLOCATED:AtomicUsize=AtomicUsize::new(0);
 static FREED:AtomicUsize=AtomicUsize::new(0);
 static DRAWS:AtomicUsize=AtomicUsize::new(0);
+static INFO_CALLS:AtomicUsize=AtomicUsize::new(0);
 static LIVE_PIXEL_BYTES:AtomicUsize=AtomicUsize::new(0);
 static OPEN_FILES:AtomicUsize=AtomicUsize::new(0);
 static ATLAS_OPENS:AtomicUsize=AtomicUsize::new(0);
@@ -97,6 +100,8 @@ fn backend_frame(){use sys::imgui::*;for p in REGISTERED.lock().unwrap().iter().
 fn draw(id:u16)->bool{resources::diagram(imgui::DrawList,id,sys::imgui::ImVec2{x:0.,y:0.},sys::imgui::ImVec2{x:298.,y:232.})}
 fn texture()->usize{let list=REGISTERED.lock().unwrap();assert_eq!(list.len(),1);list[0]}
 #[test]fn real_loaders_close_reopen_and_deferred_free_are_bounded(){
+ assert!(!diagnostics::enabled());let mut evaluated=0;
+ crate::diagnostic_info!("{}",{evaluated+=1;evaluated});assert_eq!(evaluated,0);assert_eq!(INFO_CALLS.load(Ordering::Relaxed),0);
  use sys::imgui::ImTextureStatus as S;
  let id=generated::DIAGRAM_SOURCES.iter().position(|&(w,_)|w>0).unwrap() as u16;
  resources::maintain_diagram(false);assert!(REGISTERED.lock().unwrap().is_empty());
@@ -123,6 +128,11 @@ fn texture()->usize{let list=REGISTERED.lock().unwrap();assert_eq!(list.len(),1)
  }
  assert_eq!(DRAWS.load(Ordering::Relaxed),100);
  check_icon_lifetime();check_both_textures(id);check_icon_failures();
+ assert_eq!(INFO_CALLS.load(Ordering::Relaxed),0,"disabled checkbox must suppress all normal resource logs");
+ diagnostics::set_enabled(true);crate::diagnostic_info!("{}",{evaluated+=1;evaluated});assert_eq!(evaluated,1);
+ icons(true);backend_frame();icons(true);finish_icon_close();
+ assert_eq!(INFO_CALLS.load(Ordering::Relaxed),3,"enabled: explicit diagnostic plus atlas load/release");
+ diagnostics::set_enabled(false);icons(true);backend_frame();icons(true);finish_icon_close();assert_eq!(INFO_CALLS.load(Ordering::Relaxed),3);
 }
 fn draw_icon(){resources::icon(imgui::DrawList,0,sys::imgui::ImVec2{x:0.,y:0.},sys::imgui::ImVec2{x:22.,y:22.},u32::MAX,false);}
 fn icons(open:bool){resources::maintain_icons(open,1./60.);}

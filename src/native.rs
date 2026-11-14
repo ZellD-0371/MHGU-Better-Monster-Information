@@ -1,6 +1,6 @@
 //! MHGU global 1.4.0 Hunter's Notes adapter; character and inventory data are read only.
 use core::{ptr,sync::atomic::{AtomicU32,Ordering}};
-use forge::log::prelude::info;
+
 static OWNER:AtomicU32=AtomicU32::new(0);
 static LAST:AtomicU32=AtomicU32::new(u32::MAX);
 static COUNT:AtomicU32=AtomicU32::new(0);
@@ -123,8 +123,8 @@ pub fn snapshot(base:u32)->Option<Snapshot>{
     let (_,pager,id,note,_)=selected(base,owner)?;
     let page=unsafe{virtual_get(base,pager,0x24)}.unwrap_or(u32::MAX);
     let count=unsafe{byte(owner+0x50)};let key=(note as u32)<<16|page;
-    if LAST.swap(key,Ordering::AcqRel)!=key{
-        info!("[monster-info] note={} db={} page={}/{} owner={:08x}",note,id,page,count,owner);
+    if !crate::diagnostics::enabled(){LAST.store(u32::MAX,Ordering::Relaxed);}else if LAST.swap(key,Ordering::AcqRel)!=key{
+        crate::diagnostic_info!("[monster-info] note={} db={} page={}/{} owner={:08x}",note,id,page,count,owner);
     }
     let pages=COUNT.load(Ordering::Acquire) as u8;
     Some(Snapshot{id,note,pages,extra:crate::layout::supports_monster(id)&&count==pages+1&&page==pages as u32})

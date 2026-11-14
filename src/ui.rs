@@ -6,6 +6,7 @@ static mut FONT:Option<imgui::ImFont>=None;
 struct Glyph{advance:f32,top:f32,bottom:f32}
 static mut GLYPHS:Option<BTreeMap<(u32,u16),Glyph>>=None;
 static mut WRAP:Option<((String,u32,u32,u32),Vec<String>)>=None;
+static mut VIEWPORT_LOG:crate::layout::ViewportLog=crate::layout::ViewportLog::NEW;
 fn glyph(pixels:f32,ch:char)->Glyph{unsafe{
  let key=(pixels as u32,u16::try_from(ch as u32).unwrap_or(0xfffd));
  let cache=&mut*core::ptr::addr_of_mut!(GLYPHS);let cache=cache.get_or_insert_with(BTreeMap::new);
@@ -32,16 +33,28 @@ unsafe extern "C" fn before_language_frame(_ctx:*mut sys::ImGuiContext,_hook:*mu
 }
 pub fn init(){unsafe{
  let ctx=sys::igGetCurrentContext();if ctx==LANGUAGE_CONTEXT&&LANGUAGE_HOOK!=0{return}LANGUAGE_CONTEXT=ctx;LANGUAGE_HOOK=0;
- crate::storage::poll();crate::language::reset();GLYPHS=None;WRAP=None;FONT=None;
+ crate::storage::poll();crate::language::reset();GLYPHS=None;WRAP=None;FONT=None;VIEWPORT_LOG=crate::layout::ViewportLog::NEW;
  let requested=STATE.with(|s|s.language);let language=switch_language(requested,false)||switch_language(0,false);
  if crate::language::font_valid(){FONT=imgui::ImFont::load(c"app:/nativeNX/plugins/better-monster-information/languages/font.shared.otf");}
  let hook=sys::ImGuiContextHook{HookId:0,Type:sys::ImGuiContextHookType::NewFramePre,Owner:0x424d4931,Callback:Some(before_language_frame),UserData:core::ptr::null_mut()};LANGUAGE_HOOK=sys::igAddContextHook(ctx,&hook);
  let font=FONT;let ready=language&&font.is_some()&&LANGUAGE_HOOK!=0&&STATE.with(|s|s.input_ready);
- STATE.with(|s|s.ready=ready);forge::log::prelude::info!("[monster-info] single-language resources and subset font ready={}",ready);
+ STATE.with(|s|s.ready=ready);crate::diagnostic_info!("[monster-info] single-language resources and subset font ready={}",ready);
 }}
 struct Canvas{draw:imgui::DrawList,scale:f32,ox:f32,oy:f32,right_ox:f32}
 impl Canvas{
- fn new()->Option<Self>{let draw=imgui::DrawList::foreground();if draw.raw().is_null(){return None}let sz=imgui::get_io().DisplaySize;let base=crate::BASE.load(core::sync::atomic::Ordering::Acquire);let v=crate::native::hud_size(base).and_then(|(rw,rh,uw)|crate::layout::hud_viewport(sz.x,sz.y,rw,rh,uw)).or_else(||crate::layout::native_viewport(sz.x,sz.y))?;Some(Self{draw,scale:v.scale,ox:v.ox,oy:v.oy,right_ox:v.right_ox})}
+ fn new()->Option<Self>{
+  let draw=imgui::DrawList::foreground();if draw.raw().is_null(){return None}
+  let io=imgui::get_io();let sz=io.DisplaySize;let fb=io.DisplayFramebufferScale;
+  let base=crate::BASE.load(core::sync::atomic::Ordering::Acquire);let hud=crate::native::hud_size(base);
+  let resolved=crate::layout::resolve_viewport(sz.x,sz.y,hud);let(rw,rh,uw)=hud.unwrap_or((0,0,0));
+  let key=[sz.x.to_bits(),sz.y.to_bits(),fb.x.to_bits(),fb.y.to_bits(),hud.is_some() as u32,rw,rh,uw];
+  if unsafe{(&mut*core::ptr::addr_of_mut!(VIEWPORT_LOG)).record(STATE.with(|s|s.logging),key)}{
+   if let Some((v,placement))=resolved{
+    crate::diagnostic_info!("[monster-info-layout] display={}x{} framebuffer_scale_milli={},{} hud_present={} render={}x{} hud_width={} placement={} scale_milli={} left_x_milli={} right_x_milli={} top_y_milli={}",sz.x as i32,sz.y as i32,(fb.x*1000.) as i32,(fb.y*1000.) as i32,hud.is_some(),rw,rh,uw,placement.label(),(v.scale*1000.) as i32,(v.ox*1000.) as i32,(v.right_ox*1000.) as i32,(v.oy*1000.) as i32);
+   }else{forge::log::prelude::warn!("[monster-info-layout] invalid display_bits={},{} framebuffer_scale_bits={},{} hud_present={} render={}x{} hud_width={}; drawing skipped",key[0],key[1],key[2],key[3],hud.is_some(),rw,rh,uw);}
+  }
+  let(v,_)=resolved?;Some(Self{draw,scale:v.scale,ox:v.ox,oy:v.oy,right_ox:v.right_ox})
+ }
  fn right_canvas(&self)->Self{Self{draw:self.draw,scale:self.scale,ox:self.right_ox,oy:self.oy,right_ox:self.right_ox}}
  fn p(&self,x:f32,y:f32)->ImVec2{ImVec2{x:self.ox+x*self.scale,y:self.oy+y*self.scale}}
  fn pixels(&self,size:f32)->f32{((size*self.scale+0.5) as u32).max(1) as f32}
@@ -230,7 +243,7 @@ pub fn render(){
  r::maintain_diagram(notes_open);
  // Preload on native notes pages too, before the additional page needs icons.
  r::maintain_icons(notes_open&&STATE.with(|s|s.ready&&s.enabled),imgui::get_io().DeltaTime);
- let visible=STATE.with(|s|s.visible&&s.ready);if !visible{return}if forge::graphics::Graphics::is_menu_visible(){return}
+ let visible=STATE.with(|s|s.visible&&s.ready);if !visible{unsafe{(&mut*core::ptr::addr_of_mut!(VIEWPORT_LOG)).reset();}return}if forge::graphics::Graphics::is_menu_visible(){return}
  let(id,tab)=STATE.with(|s|(s.id,s.tab));if tab==0{r::load_diagram(id);}let Some(cv)=Canvas::new()else{return};STATE.with(|s|screen(&cv,s));
 }
 pub fn menu(){
@@ -240,6 +253,8 @@ pub fn menu(){
  for(label,options,current,is_language)in [(c"Language",&names[..],lang,true),(c"Button layout",&layouts[..],layout,false)]{
   let selected=CString::new(options[current]).unwrap();if imgui::begin_combo(label,&selected,ImGuiComboFlags::None){for(i,name)in options.iter().enumerate(){let text=CString::new(*name).unwrap();if imgui::selectable(&text,i==current,ImGuiSelectableFlags::None,ImVec2{x:0.,y:0.}){if is_language{PENDING_LANGUAGE.store(i as u32+1,core::sync::atomic::Ordering::Release);}else{STATE.with(|s|{s.layout=i;s.clock=0.;});changed=true;}}}imgui::end_combo();}
  }
+ let mut logging=STATE.with(|s|s.logging);
+ if imgui::checkbox(crate::settings_labels::LOGGING[lang],&mut logging){STATE.with(|s|s.logging=logging);crate::diagnostics::set_enabled(logging);unsafe{(&mut*core::ptr::addr_of_mut!(VIEWPORT_LOG)).reset();}changed=true;}
  if changed&&!crate::storage::save_preferences(){imgui::text("Settings could not be saved. See Forge log.");}
  imgui::text(&r::text(g::UI_NOTESINFO[0],STATE.with(|s|s.language)));
  if !STATE.with(|s|s.ready){imgui::text("Unavailable: resource, input, or signature check failed.");}

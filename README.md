@@ -72,6 +72,7 @@ Press Insert to open the Forge menu, then navigate to `Plugin UI > Better Monste
 | --- | --- |
 | Language | Select from 9 supported languages. Default: English |
 | Button layout | Nintendo / Xbox / PlayStation. Default: Nintendo |
+| Enable logging | Record navigation, resource and screen-layout diagnostics. Default: Off. Warnings and errors remain enabled. The label follows the selected language. |
 
 Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, Deutsch, Français, Italiano, Español
 
@@ -79,7 +80,7 @@ Supported languages: English, 简体中文, 繁體中文, 日本語, 한국어, 
 
 | File | Contents |
 | --- | --- |
-| `better-monster-information.ini` | Global language and button layout settings |
+| `better-monster-information.ini` | Global language, button layout, and diagnostic logging settings |
 
 The default Windows Recomp save location is `%APPDATA%\MHGURecomp\save\save_0\`. If your environment uses a custom save location, that location is used instead.
 
