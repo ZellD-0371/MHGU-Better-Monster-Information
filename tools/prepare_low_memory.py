@@ -30,7 +30,7 @@ def main():
   im=Image.frombytes('RGBA',(w,h),raw);im.thumbnail((384,256),Image.Resampling.LANCZOS)
   data=im.tobytes();(part_dir/f'{ident}.rgba').write_bytes(data);sizes.append(im.size)
   files[str(ident)]={'width':im.width,'height':im.height,'bytes':len(data),'source_sha256':hashlib.sha256(raw).hexdigest(),'sha256':hashlib.sha256(data).hexdigest()}
- source_line='pub static DIAGRAM_SOURCES:[(u16,u16);130]=['+','.join(f'({w},{h})' for w,h in sizes)+'];'
+ source_line='pub static DIAGRAM_SOURCES:[(u16,u16);'+str(len(sizes))+']=['+','.join(f'({w},{h})' for w,h in sizes)+'];'
  code=re.sub(r'pub static DIAGRAM_SOURCES:[^\n]+',lambda _:source_line,code)
  code=re.sub(r'DIAGRAM_TEX_W:usize=\d+','DIAGRAM_TEX_W:usize=384',code)
  code=re.sub(r'DIAGRAM_TEX_H:usize=\d+','DIAGRAM_TEX_H:usize=256',code)

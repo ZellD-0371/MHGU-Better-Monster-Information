@@ -143,9 +143,10 @@ impl Canvas{
 }
 fn t(id:u32,s:&State)->alloc::rc::Rc<str>{r::text(id,s.language)}
 use crate::numeric::{number,percent};
+fn diagram_id(s:&State)->u16{if s.id==39&&g::WEAK.get(g::MONSTERS[39].weak as usize+s.row).is_some_and(|row|row.part>=8){130}else{s.id}}
 fn weak_table(cv:&Canvas,s:&State){
- let m=&g::MONSTERS[s.id as usize];let(w,h)=g::DIAGRAMS[s.id as usize];let dx=42.+(298.-w as f32)*0.5;let dy=250.+(215.-h as f32)*0.5;
- if !r::diagram(cv.draw,s.id,cv.p(dx,dy),cv.p(dx+w as f32,dy+h as f32)){cv.label(42.,320.,298.,50.,24.,INK,t(g::UI_NODIAGRAM[0],s),true);}
+ let m=&g::MONSTERS[s.id as usize];let diagram=diagram_id(s);let(w,h)=g::DIAGRAMS[diagram as usize];let dx=42.+(298.-w as f32)*0.5;let dy=250.+(215.-h as f32)*0.5;
+ if !r::diagram(cv.draw,diagram,cv.p(dx,dy),cv.p(dx+w as f32,dy+h as f32)){cv.label(42.,320.,298.,50.,24.,INK,t(g::UI_NODIAGRAM[0],s),true);}
  let row=g::WEAK.get(m.weak as usize+s.row);
  if s.mode==1{if let Some(row)=row{
   for i in row.ring as usize..row.ring as usize+row.ring_len as usize{
@@ -174,7 +175,8 @@ fn ordinary_table(cv:&Canvas,s:&State){
  let m=&g::MONSTERS[s.id as usize];let rows=if s.tab==1{&g::AILMENTS[m.ail as usize..(m.ail+m.ail_len) as usize]}else{&g::TRAPS[m.trap as usize..(m.trap+m.trap_len) as usize]};
  let widths:&[f32]=if s.tab==1{&[162.,130.,115.,130.,160.,119.]}else{&[212.,160.,148.,148.,148.]};
  let headers:&[u32]=if s.tab==1{&[g::UI_TABS[1],g::UI_INITIAL[0],g::UI_INCREASE[0],g::UI_MAXIMUM[0],g::UI_DURATION[0],g::UI_DAMAGE[0]]}else{&[g::UI_TABS[2],g::UI_EFFECTIVE[0],g::UI_NORMAL[0],g::UI_ENRAGED[0],g::UI_FATIGUED[0]]};
- cv.rect(68.,226.,816.,37.,0xffa4b7c4);let mut x=68.;for(i,width)in widths.iter().enumerate(){let header=if s.tab==2&&i>=2{format!("{} (s)",t(headers[i],s))}else{t(headers[i],s).as_ref().into()};cv.label(x+4.,226.,width-8.,37.,20.,INK,&header,true);x+=width;}
+ if s.tab==2{cv.label(564.,193.,320.,27.,18.,INK,t(g::UI_TIMEUNIT[0],s),false);}
+ cv.rect(68.,226.,816.,37.,0xffa4b7c4);let mut x=68.;for(i,width)in widths.iter().enumerate(){let header=t(headers[i],s);cv.label(x+4.,226.,width-8.,37.,20.,INK,&header,true);x+=width;}
  for(i,row)in rows.iter().enumerate(){let y=268.+i as f32*34.;cv.line(68.,y+33.,884.,y+33.,LINE,1.);cv.icon(row.icon as usize,76.,y+6.,22.,0xffffffff);cv.label(102.,y,widths[0]-39.,33.,20.,INK,t(row.name,s),false);let mut x=68.+widths[0];
   for col in 1..widths.len(){if s.tab==2&&col==1{cv.label(x+4.,y,widths[col]-8.,33.,24.,INK,t(if row.values[0]>0.{g::UI_EFFECTIVE[0]}else{g::UI_INEFFECTIVE[0]},s),true);}else{cv.label(x+4.,y,widths[col]-8.,33.,24.,INK,number(row.values[col-1]),true);}x+=widths[col];}
  }
@@ -244,7 +246,7 @@ pub fn render(){
  // Preload on native notes pages too, before the additional page needs icons.
  r::maintain_icons(notes_open&&STATE.with(|s|s.ready&&s.enabled),imgui::get_io().DeltaTime);
  let visible=STATE.with(|s|s.visible&&s.ready);if !visible{unsafe{(&mut*core::ptr::addr_of_mut!(VIEWPORT_LOG)).reset();}return}if forge::graphics::Graphics::is_menu_visible(){return}
- let(id,tab)=STATE.with(|s|(s.id,s.tab));if tab==0{r::load_diagram(id);}let Some(cv)=Canvas::new()else{return};STATE.with(|s|screen(&cv,s));
+ let(id,tab)=STATE.with(|s|(diagram_id(s),s.tab));if tab==0{r::load_diagram(id);}let Some(cv)=Canvas::new()else{return};STATE.with(|s|screen(&cv,s));
 }
 pub fn menu(){
  if !imgui::tree_node(c"Better Monster Information"){return}

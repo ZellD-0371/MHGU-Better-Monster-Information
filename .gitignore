@@ -6,6 +6,7 @@ preview-settings.json
 *.nro
 *.zip
 /preview/
+/research/
 /Preview.cmd
 /Preview.ps1
 /requirements.txt
