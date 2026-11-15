@@ -155,3 +155,5 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
 
 #[test]fn neset_parts_use_reviewed_rings_and_separate_picture(){let m=&generated::MONSTERS[39];for row in &generated::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize]{if row.part>=8{assert!(row.ring_len>0);assert!(!row.pending);}}assert!(generated::DIAGRAM_SOURCES[130].0>0);}
 
+
+#[path="../src/menu_input.rs"]mod menu_input;
