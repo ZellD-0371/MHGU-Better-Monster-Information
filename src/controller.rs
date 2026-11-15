@@ -24,8 +24,10 @@ fn menu_translate(object:u32,word:u32)->u32{
  output.filtered
 }
 pub fn install(base:u32)->bool{
- // Validate the original MHGU 1.4.0 code before patching. No host APIs or
- // Recomp config files are required by the hook on Switch/emulators.
- if unsafe{crate::native::rd(base+0x3de4f8)}!=0xe3a02010||unsafe{crate::native::rd(base+0x3de4fc)}!=0xe3a00040{return false}
+ // Preserve Forge's hook chain when another mod installed its translator
+ // first. Validate the unchanged tail instead of requiring a pristine entry.
+ let site=base+0x3de4f8;
+ let words=core::array::from_fn(|i|unsafe{crate::native::rd(site+i as u32*4)});
+ if !crate::hook_guard::menu_entry(words,site){return false}
  forge::install_hook!(base,menu_translate);true
 }

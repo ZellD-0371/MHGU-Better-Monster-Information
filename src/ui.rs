@@ -61,7 +61,16 @@ impl Canvas{
  fn rect(&self,x:f32,y:f32,w:f32,h:f32,col:u32){self.draw.add_rect_filled(self.p(x,y),self.p(x+w,y+h),col,0.);}
  fn border(&self,x:f32,y:f32,w:f32,h:f32,col:u32){self.draw.add_rect(self.p(x,y),self.p(x+w,y+h),col,0.,self.scale,ImDrawFlags::None);}
  fn line(&self,x:f32,y:f32,x2:f32,y2:f32,col:u32,thickness:f32){self.draw.add_line(self.p(x,y),self.p(x2,y2),col,thickness*self.scale);}
- fn icon(&self,id:usize,x:f32,y:f32,size:f32,tint:u32){let Some(sprite)=g::SPRITES.get(id)else{return};let ratio=size/(sprite.w.max(sprite.h) as f32);let(w,h)=(sprite.w as f32*ratio,sprite.h as f32*ratio);r::icon(self.draw,id,self.p(x+(size-w)*0.5,y+(size-h)*0.5),self.p(x+(size+w)*0.5,y+(size+h)*0.5),tint,false);}
+ fn icon(&self,id:usize,x:f32,y:f32,size:f32,tint:u32){
+  let mut id=id;
+  if let Some((layout,action))=g::PROMPTS.iter().enumerate().find_map(|(l,row)|row.iter().position(|&v|v==id).map(|a|(l,a))){
+   match crate::button_prompts::get(action){
+    crate::button_prompts::Prompt::Original=>{},
+    crate::button_prompts::Prompt::Position(p)=>id=g::PROMPTS[layout][crate::button_prompts::icon_slot(p,layout)],
+    crate::button_prompts::Prompt::Text(text)=>{self.rect(x,y,size,size,0xffeeeeee);self.label(x,y,size,size,size*0.65,INK,&text,true);return}
+   }
+  }
+  let Some(sprite)=g::SPRITES.get(id)else{return};let ratio=size/(sprite.w.max(sprite.h) as f32);let(w,h)=(sprite.w as f32*ratio,sprite.h as f32*ratio);r::icon(self.draw,id,self.p(x+(size-w)*0.5,y+(size-h)*0.5),self.p(x+(size+w)*0.5,y+(size+h)*0.5),tint,false);}
  fn measure(&self,size:f32,text:impl AsRef<str>)->f32{let text=text.as_ref();
   let pixels=self.pixels(size);let mut line=0_f32;let mut width=0_f32;if crate::perf::legacy(){if let Some(font)=unsafe{FONT}{unsafe{let baked=sys::ImFont_GetFontBaked(font.raw(),pixels,1.);if !baked.is_null(){for ch in text.chars(){if ch=='\n'{width=width.max(line);line=0.;continue}let g=sys::ImFontBaked_FindGlyph(baked,u16::try_from(ch as u32).unwrap_or(0xfffd));if !g.is_null(){line+=(*g).AdvanceX;}}return width.max(line)/self.scale}}}}
   for ch in text.chars(){if ch=='\n'{width=width.max(line);line=0.;continue}line+=glyph(pixels,ch).advance;}width.max(line)/self.scale
@@ -146,7 +155,7 @@ use crate::numeric::{number,percent};
 fn diagram_id(s:&State)->u16{if s.id==39&&g::WEAK.get(g::MONSTERS[39].weak as usize+s.row).is_some_and(|row|row.part>=8){130}else{s.id}}
 fn weak_table(cv:&Canvas,s:&State){
  let m=&g::MONSTERS[s.id as usize];let diagram=diagram_id(s);let(w,h)=g::DIAGRAMS[diagram as usize];let dx=42.+(298.-w as f32)*0.5;let dy=250.+(215.-h as f32)*0.5;
- if !r::diagram(cv.draw,diagram,cv.p(dx,dy),cv.p(dx+w as f32,dy+h as f32)){cv.label(42.,320.,298.,50.,24.,INK,t(g::UI_NODIAGRAM[0],s),true);}
+ if !r::diagram(cv.draw,diagram,cv.p(dx,dy),cv.p(dx+w as f32,dy+h as f32)){if w==0{cv.label(42.,320.,298.,50.,24.,INK,t(g::UI_NODIAGRAM[0],s),true);}else{cv.label(42.,320.,298.,50.,24.,INK,"…",true);}}
  let row=g::WEAK.get(m.weak as usize+s.row);
  if s.mode==1{if let Some(row)=row{
   for i in row.ring as usize..row.ring as usize+row.ring_len as usize{
@@ -242,6 +251,7 @@ fn screen(cv:&Canvas,s:&State){
 pub fn render(){
  let base=crate::BASE.load(core::sync::atomic::Ordering::Acquire);
  let notes_open=crate::native::notes_open(base);
+ if notes_open||forge::graphics::Graphics::is_menu_visible(){crate::button_prompts::refresh(imgui::get_io().DeltaTime); }
  r::maintain_diagram(notes_open);
  // Preload on native notes pages too, before the additional page needs icons.
  r::maintain_icons(notes_open&&STATE.with(|s|s.ready&&s.enabled),imgui::get_io().DeltaTime);

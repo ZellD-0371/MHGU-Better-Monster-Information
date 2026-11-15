@@ -92,7 +92,7 @@ pub mod sys{pub mod imgui{
 fn backend_frame(){use sys::imgui::*;for p in REGISTERED.lock().unwrap().iter().copied(){unsafe{
  let t=p as *mut ImTextureData;
  match (*t).Status{
-  ImTextureStatus::WantCreate|ImTextureStatus::WantUpdates=>{(*t).TexID=1;ImTextureData_SetStatus(t,ImTextureStatus::OK);},
+  ImTextureStatus::WantCreate=>{(*t).TexID=1;ImTextureData_SetStatus(t,ImTextureStatus::OK);},
   ImTextureStatus::WantDestroy if (*t).UnusedFrames>=3=>{assert!((*t).WantDestroyNextFrame);(*t).TexID=0;ImTextureData_SetStatus(t,ImTextureStatus::Destroyed);},
   _=>{},
  }
@@ -127,12 +127,31 @@ fn texture()->usize{let list=REGISTERED.lock().unwrap();assert_eq!(list.len(),1)
   resources::maintain_diagram(false); // repeated close is a no-op, not a double free
  }
  assert_eq!(DRAWS.load(Ordering::Relaxed),100);
- check_icon_lifetime();check_both_textures(id);check_icon_failures();
+ check_diagram_switches();check_icon_lifetime();check_both_textures(id);check_icon_failures();
  assert_eq!(INFO_CALLS.load(Ordering::Relaxed),0,"disabled checkbox must suppress all normal resource logs");
  diagnostics::set_enabled(true);crate::diagnostic_info!("{}",{evaluated+=1;evaluated});assert_eq!(evaluated,1);
  icons(true);backend_frame();icons(true);finish_icon_close();
  assert_eq!(INFO_CALLS.load(Ordering::Relaxed),3,"enabled: explicit diagnostic plus atlas load/release");
  diagnostics::set_enabled(false);icons(true);backend_frame();icons(true);finish_icon_close();assert_eq!(INFO_CALLS.load(Ordering::Relaxed),3);
+ // Reproduce a backend that never acknowledges WantUpdates. Logging must be
+ // bounded and must not mutate the state or allocate a replacement texture.
+ diagnostics::set_enabled(true);resources::load_diagram(id);backend_frame();
+ let next=generated::DIAGRAM_SOURCES.iter().enumerate().find(|&(i,&(w,_))|i!=id as usize&&w>0).unwrap().0 as u16;
+ let t=texture() as *mut sys::imgui::ImTextureData;
+ // Deliberately inject the old failure; the production switch path must never request this status.
+ unsafe{sys::imgui::ImTextureData_SetStatus(t,S::WantUpdates);}
+ let _=next;
+ assert_eq!(unsafe{(*t).Status},S::WantUpdates);
+ let before=INFO_CALLS.load(Ordering::Relaxed);let allocated=ALLOCATED.load(Ordering::Relaxed);
+ for _ in 0..600{resources::load_diagram(id);assert!(!draw(id));}
+ assert_eq!(unsafe{(*t).Status},S::WantUpdates);assert_eq!(ALLOCATED.load(Ordering::Relaxed),allocated);
+ let count=INFO_CALLS.load(Ordering::Relaxed)-before;assert!(count>0&&count<=8,"state logs should only report changes and sparse checkpoints: {count}");
+ diagnostics::set_enabled(false);let before=INFO_CALLS.load(Ordering::Relaxed);
+ for _ in 0..100{resources::load_diagram(id);assert!(!draw(id));}
+ assert_eq!(INFO_CALLS.load(Ordering::Relaxed),before);
+ unsafe{sys::imgui::ImTextureData_SetStatus(t,S::OK);}
+ backend_frame();resources::maintain_diagram(false);for _ in 0..4{backend_frame();resources::maintain_diagram(false);}assert_no_resources();
+
 }
 fn draw_icon(){resources::icon(imgui::DrawList,0,sys::imgui::ImVec2{x:0.,y:0.},sys::imgui::ImVec2{x:22.,y:22.},u32::MAX,false);}
 fn icons(open:bool){resources::maintain_icons(open,1./60.);}
@@ -193,4 +212,33 @@ fn check_icon_failures(){
   icons(false);icons(true);assert_eq!(REGISTERED.lock().unwrap().len(),1);
   backend_frame();icons(true);draw_icon();finish_icon_close();
  }
+}
+
+fn check_diagram_switches(){
+ use sys::imgui::ImTextureStatus as S;
+ // The fake backend intentionally never completes WantUpdates, matching the
+ // failing NVN behavior. All diagrams must still become drawable via WantCreate.
+ let ids:Vec<u16>=generated::DIAGRAM_SOURCES.iter().enumerate().filter(|(_,s)|s.0>0).map(|(id,_)|id as u16).collect();
+ for &id in ids.iter().chain(ids.iter().rev()){
+  let mut ready=false;
+  for _ in 0..8{
+   resources::maintain_diagram(true);resources::load_diagram(id);
+   assert!(REGISTERED.lock().unwrap().len()<=1);
+   assert!(ALLOCATED.load(Ordering::Relaxed)-FREED.load(Ordering::Relaxed)<=1);
+   for &t in REGISTERED.lock().unwrap().iter(){assert_ne!(unsafe{(*(t as *mut sys::imgui::ImTextureData)).Status},S::WantUpdates);}
+   backend_frame();
+   if draw(id){ready=true;break}
+  }
+  assert!(ready,"diagram {id} did not finish switching");
+  let allocated=ALLOCATED.load(Ordering::Relaxed);
+  for _ in 0..4{resources::load_diagram(id);backend_frame();assert!(draw(id));}
+  assert_eq!(ALLOCATED.load(Ordering::Relaxed),allocated,"same monster must reuse its loaded image");
+ }
+ // A new selection during retirement should create only the latest requested image.
+ let first=ids[0];resources::load_diagram(first);
+ let allocated=ALLOCATED.load(Ordering::Relaxed);resources::load_diagram(ids[1]);
+ assert_eq!(ALLOCATED.load(Ordering::Relaxed),allocated);
+ for _ in 0..8{resources::maintain_diagram(true);resources::load_diagram(ids[2]);backend_frame();}
+ assert!(draw(ids[2]));assert_eq!(ALLOCATED.load(Ordering::Relaxed),allocated+1);
+ resources::maintain_diagram(false);for _ in 0..4{backend_frame();resources::maintain_diagram(false);}assert_no_resources();
 }

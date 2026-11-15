@@ -60,7 +60,7 @@ unsafe fn free_texture(tex:*mut sys::ImTextureData){unsafe{
 pub fn maintain_diagram(notes_open:bool){unsafe{
  if retire_texture(DIAGRAM.map(|(tex,_,_)|tex),&mut*core::ptr::addr_of_mut!(LIFETIME),notes_open){
   if let Some((tex,_,id))=core::ptr::addr_of_mut!(DIAGRAM).replace(None){
-   free_texture(tex);crate::diagnostic_info!("[monster-info] diagram {} released after notes closed",id);
+   free_texture(tex);crate::diagnostic_info!("[monster-info] diagram {} released after GPU retirement",id);
   }
  }
 }}
@@ -78,17 +78,45 @@ pub fn maintain_icons(notes_open:bool,dt:f32){unsafe{
   ICONS=Some(texture);retry.succeeded();crate::diagnostic_info!("[monster-info] icon atlas loaded on demand");
  }else{retry.failed();forge::log::prelude::warn!("[monster-info] icon atlas load failed; retry limited");}
 }}
+// Per-phase change detection: diagnostics must not become per-frame output.
+static mut DIAGRAM_LOG_KEYS:[[usize;4];2]=[[usize::MAX;4];2];
+static mut DIAGRAM_LOG_REPEATS:[u32;2]=[0;2];
+unsafe fn diagram_debug(phase:usize,id:u16,reason:usize){unsafe{
+ if !crate::diagnostics::enabled(){DIAGRAM_LOG_KEYS[phase]=[usize::MAX;4];DIAGRAM_LOG_REPEATS[phase]=0;return}
+ let (loaded,tex)=DIAGRAM.map(|(t,_,i)|(i as usize,t)).unwrap_or((65535,core::ptr::null_mut()));
+ let status=if tex.is_null(){usize::MAX}else{(*tex).Status as usize};
+ let key=[id as usize,loaded,status,reason];
+ if DIAGRAM_LOG_KEYS[phase]!=key{DIAGRAM_LOG_KEYS[phase]=key;DIAGRAM_LOG_REPEATS[phase]=0;}
+ else{DIAGRAM_LOG_REPEATS[phase]=DIAGRAM_LOG_REPEATS[phase].saturating_add(1);}
+ let repeats=DIAGRAM_LOG_REPEATS[phase];
+ if !matches!(repeats,0|60|300|1800){return}
+ let label=if tex.is_null(){"None"}else{match (*tex).Status{sys::ImTextureStatus::OK=>"OK",sys::ImTextureStatus::WantCreate=>"WantCreate",sys::ImTextureStatus::WantUpdates=>"WantUpdates",sys::ImTextureStatus::WantDestroy=>"WantDestroy",sys::ImTextureStatus::Destroyed=>"Destroyed",_=>"Other"}};
+ let texture_id=if tex.is_null(){0}else{(*tex).TexID};
+ let updates=diagram_debug_updates(tex);
+ crate::diagnostic_info!("[monster-info] diagram-debug phase={} requested={} loaded={} status={} tex={:x} tex_id={} updates={} reason={} repeats={}",if phase==0{"load"}else{"draw"},id,loaded,label,tex as usize,texture_id,updates,reason,repeats);
+}}
+#[cfg(not(test))]
+unsafe fn diagram_debug_updates(tex:*mut sys::ImTextureData)->i32{unsafe{if tex.is_null(){0}else{(*tex).Updates.Size}}}
+#[cfg(test)]
+unsafe fn diagram_debug_updates(_tex:*mut sys::ImTextureData)->i32{0}
 pub fn load_diagram(id:u16){unsafe{
- if (&*core::ptr::addr_of!(LIFETIME)).retiring(){return}
+ if (&*core::ptr::addr_of!(LIFETIME)).retiring(){diagram_debug(0,id,1);return}
  let retry=&mut*core::ptr::addr_of_mut!(RETRY);retry.select(id);
  if let Some((tex,_,old))=DIAGRAM{
   // Recomp mirrors ImTextureData. The renderer changes the host object after
   // this callback; refresh via its API before testing the guest Status copy.
   let _=sys::ImTextureData_GetTexID(tex);
-  if old==id||(*tex).Status!=sys::ImTextureStatus::OK{return}
+  if old==id||(*tex).Status!=sys::ImTextureStatus::OK{diagram_debug(0,id,if old==id{2}else{3});return}
+  // Forge 1.5.1's NVN WantUpdates path does not acknowledge completion.
+  // Retire through the existing GPU-confirmed lifetime before creating the next
+  // image. This also keeps CPU/GPU ownership bounded to one diagram texture.
+  crate::diagnostic_info!("[monster-info] diagram-debug switch {} -> {}: retiring previous texture",old,id);
+  let _=retire_texture(Some(tex),&mut*core::ptr::addr_of_mut!(LIFETIME),false);
+  diagram_debug(0,id,9);return;
  }
- if !retry.allows(){return}
- if crate::generated::DIAGRAM_SOURCES.get(id as usize).is_none_or(|&(w,_)|w==0){return}
+ if !retry.allows(){diagram_debug(0,id,4);return}
+ if crate::generated::DIAGRAM_SOURCES.get(id as usize).is_none_or(|&(w,_)|w==0){diagram_debug(0,id,5);return}
+ diagram_debug(0,id,6);
  match try_load_diagram(id){Ok(())=>retry.succeeded(),Err(reason)=>{retry.failed();forge::log::prelude::warn!("[monster-info] diagram {}: {}; retry limited",id,reason);}}
 }}
 unsafe fn try_load_diagram(id:u16)->Result<(),&'static str>{unsafe{
@@ -98,16 +126,10 @@ unsafe fn try_load_diagram(id:u16)->Result<(),&'static str>{unsafe{
  let file=sys::igImFileOpen(path.as_ptr(),c"rb".as_ptr());if file.is_null(){return Err("file open failed")}
  if sys::igImFileGetSize(file)!=w as u64*h as u64*4{sys::igImFileClose(file);return Err("file size mismatch")}
  let(tw,th)=dimensions();if w as usize>tw||h as usize>th{sys::igImFileClose(file);return Err("diagram exceeds texture canvas")}
- let(tex,reference,fresh)=if let Some((tex,reference,_))=DIAGRAM{(tex,reference,false)}else{
-  
-  let tex=sys::ImTextureData_ImTextureData();if tex.is_null(){sys::igImFileClose(file);return Err("texture object allocation failed")}
-  // Use Forge's texture API: Recomp marshals host pixels into guest memory.
-  // Assigning a guest allocation directly to Pixels bypasses that ownership bridge.
-  sys::ImTextureData_Create(tex,sys::ImTextureFormat::RGBA32,tw as i32,th as i32);
-  let pixels=sys::ImTextureData_GetPixels(tex) as *mut u8;
-  if pixels.is_null(){sys::ImTextureData_destroy(tex);sys::igImFileClose(file);return Err("CPU pixels allocation failed")}
-  (tex,sys::ImTextureData_GetTexRef(tex),true)
- };
+ if core::ptr::addr_of!(DIAGRAM).read().is_some(){sys::igImFileClose(file);return Err("previous texture not retired")}
+ let tex=sys::ImTextureData_ImTextureData();if tex.is_null(){sys::igImFileClose(file);return Err("texture object allocation failed")}
+ sys::ImTextureData_Create(tex,sys::ImTextureFormat::RGBA32,tw as i32,th as i32);
+ let reference=sys::ImTextureData_GetTexRef(tex);let fresh=true;
  let pixels=sys::ImTextureData_GetPixels(tex) as *mut u8;if pixels.is_null(){sys::igImFileClose(file);if fresh{sys::ImTextureData_destroy(tex);}return Err("CPU pixel mapping failed")}core::ptr::write_bytes(pixels,0,tw*th*4);
  // Both variants read ready-to-display rows directly into the reused texture.
  // Low Memory ships pre-resized files; no runtime resize or second image buffer.
@@ -118,11 +140,12 @@ unsafe fn try_load_diagram(id:u16)->Result<(),&'static str>{unsafe{
  }
  sys::igImFileClose(file);if !ok{if fresh{sys::ImTextureData_destroy(tex);}return Err("image read failed")}
  let rect=sys::ImTextureRect{x:0,y:0,w:tw as u16,h:th as u16};(*tex).UsedRect=rect;
- if fresh{sys::igRegisterUserTexture(tex);}else{
-  (*tex).UpdateRect=rect;
-  sys::ImTextureData_SetStatus(tex,sys::ImTextureStatus::WantUpdates);
- }
- DIAGRAM=Some((tex,reference,id));Ok(())
+ // Register only after all file rows were read. WantCreate is completed by
+ // both Forge's native NVN backend and Recomp's renderer.
+ sys::igRegisterUserTexture(tex);
+ DIAGRAM=Some((tex,reference,id));
+ crate::diagnostic_info!("[monster-info] diagram-debug submitted id={} fresh={} source={}x{} canvas={}x{} bytes={}",id,fresh,w,h,tw,th,w as usize*h as usize*4);
+ diagram_debug(0,id,if fresh{7}else{8});Ok(())
 }}
 pub fn icon(draw:DrawList,id:usize,p1:ImVec2,p2:ImVec2,tint:u32,flip:bool){unsafe{
     sprite(draw,id,p1,p2,tint,flip,false);
@@ -136,6 +159,7 @@ pub fn sprite(draw:DrawList,id:usize,p1:ImVec2,p2:ImVec2,tint:u32,flip_x:bool,fl
     draw.add_image(reference,p1,p2,ImVec2{x:left as f32/2048.,y:top as f32/g::ATLAS_HEIGHT as f32},ImVec2{x:right as f32/2048.,y:bottom as f32/g::ATLAS_HEIGHT as f32},tint);
 }}
 pub fn diagram(draw:DrawList,id:u16,p1:ImVec2,p2:ImVec2)->bool{unsafe{
+ diagram_debug(1,id,0);
     if (&*core::ptr::addr_of!(LIFETIME)).retiring(){return false}
     let Some((tex,reference,loaded))=DIAGRAM else{return false};if loaded!=id||(*tex).Status!=sys::ImTextureStatus::OK{return false}
     let(w,h)=g::DIAGRAM_SOURCES[id as usize];let(tw,th)=dimensions();draw.add_image(reference,p1,p2,ImVec2{x:0.,y:0.},ImVec2{x:w as f32/tw as f32,y:h as f32/th as f32},0xffffffff);true

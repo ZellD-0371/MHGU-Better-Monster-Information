@@ -157,3 +157,6 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
 
 
 #[path="../src/menu_input.rs"]mod menu_input;
+#[path="../src/hook_guard.rs"]mod hook_guard;
+
+#[path="../src/button_prompts.rs"]mod button_prompts;
