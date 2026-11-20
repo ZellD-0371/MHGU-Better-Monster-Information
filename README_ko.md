@@ -115,11 +115,10 @@ py -3.10 -X utf8 tools/package_native.py --variant low-memory
 
 `src`, `.cargo`, `link`, `conf`, `assets/native`, `tools`는 네이티브 모드 빌드·검사·패키지 생성에 필요한 파일입니다. `Cargo.lock`과 생성된 Rust 데이터 및 네이티브 리소스도 함께 보관합니다.
 
-## 출처 및 크레딧
+## 크레딧
 
-몬스터 부위 도식과 육질 및 소재 데이터는 Ping의 MHXX Dex를 기반으로 제작된 MHXX Dex 웹 포트에서 가져왔습니다.
+**Ping**(원본 MHXX Dex), **fabric_soul**(MHXX Dex 웹 포트)과 웹 포트가 밝힌 기여자 breakds, 掌机迷, MHVuze, svanheulen, ACG汉化组, dasding and team, 팀 갈무리, Zeff and team께 감사드립니다. 출처와 이용 조건은 `THIRD_PARTY_NOTICES.md`에 정리했습니다.
 
-- **Ping** — 원본 MHXX Dex
-- **fabric_soul** — MHXX Dex 웹 포트
-- 웹 포트가 명시한 기여자: breakds, 掌机迷, MHVuze, svanheulen, ACG汉化组, dasding and team, 팀 갈무리, Zeff and team. 이 목록이 각 부위 그림의 개별 작성자를 확정하는 것은 아닙니다.
-- **mhgu-forge / forge-rs** — Fexty, MIT License
+## 라이선스
+
+MIT License. `LICENSE`와, 외부 구성 요소·게임 데이터에 관한 `THIRD_PARTY_NOTICES.md`를 참고하세요.

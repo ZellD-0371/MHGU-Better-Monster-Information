@@ -41,3 +41,5 @@ preview-settings.json
 !/tools/optimize_icon_atlas.py
 
 !/tools/prepare_numbers.py
+
+!/tools/prepare_kbm_icons.py

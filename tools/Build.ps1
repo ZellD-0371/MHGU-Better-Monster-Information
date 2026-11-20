@@ -14,9 +14,13 @@ try {
     $env:PATH='D:\Utils\devkitPro\devkitARM\bin;'+$env:PATH
     $env:CARGO_TARGET_ARMV7A_NONE_EABI_LINKER='D:\Utils\devkitPro\devkitARM\bin\arm-none-eabi-gcc.exe'
     $env:CARGO_NET_OFFLINE='true'
+    # Windows PowerShell 5.1 turns cargo's stderr progress into errors under 'Stop'; judge by exit code and output instead.
+    $ErrorActionPreference='Continue'
     $taskBuildOutput=(& cargo +nightly forge build --release 2>&1 | Out-String)
+    $taskCargoExit=$LASTEXITCODE
+    $ErrorActionPreference='Stop'
     Write-Host $taskBuildOutput
-    if ($LASTEXITCODE -ne 0 -or $taskBuildOutput -notmatch 'Output NRO:') { throw 'Native build failed' }
+    if ($taskCargoExit -ne 0 -or $taskBuildOutput -notmatch 'Output NRO:') { throw 'Native build failed' }
     & (Join-Path $PSScriptRoot 'Check-Instructions.ps1')
     $taskBuilt=Join-Path (Get-Location) "dist/build/$Variant"
     New-Item -ItemType Directory -Path $taskBuilt -Force | Out-Null

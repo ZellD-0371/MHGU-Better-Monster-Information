@@ -9,6 +9,7 @@ extern crate self as forge;
 #[path="../src/retry.rs"]mod retry;
 #[path="../src/diagram_lifetime.rs"]mod diagram_lifetime;
 #[path="../src/diagnostics.rs"]mod diagnostics;
+#[path="../src/generated_kbm.rs"]mod generated_kbm;
 #[path="../src/resources.rs"]mod resources;
 mod language{pub fn text(_:u32)->alloc::rc::Rc<str>{"test".into()}}
 #[macro_export]macro_rules! test_log{($($arg:tt)*)=>{let _=format_args!($($arg)*);}}
@@ -127,7 +128,7 @@ fn texture()->usize{let list=REGISTERED.lock().unwrap();assert_eq!(list.len(),1)
   resources::maintain_diagram(false); // repeated close is a no-op, not a double free
  }
  assert_eq!(DRAWS.load(Ordering::Relaxed),100);
- check_diagram_switches();check_icon_lifetime();check_both_textures(id);check_icon_failures();
+ check_diagram_switches();check_icon_lifetime();check_both_textures(id);check_icon_failures();check_kbm_lifetime();
  assert_eq!(INFO_CALLS.load(Ordering::Relaxed),0,"disabled checkbox must suppress all normal resource logs");
  diagnostics::set_enabled(true);crate::diagnostic_info!("{}",{evaluated+=1;evaluated});assert_eq!(evaluated,1);
  icons(true);backend_frame();icons(true);finish_icon_close();
@@ -161,6 +162,21 @@ fn assert_no_resources(){
 }
 fn finish_icon_close(){
  icons(false);for _ in 0..4{backend_frame();icons(false);}assert_no_resources();
+}
+fn check_kbm_lifetime(){
+ use sys::imgui::ImTextureStatus as S;
+ let key=|open:bool|resources::maintain_kbm(open,1./60.);
+ let pic=||resources::kbm_icon(imgui::DrawList,generated_kbm::find("space").unwrap(),sys::imgui::ImVec2{x:0.,y:0.},sys::imgui::ImVec2{x:18.,y:18.},u32::MAX);
+ for _ in 0..10{key(false);}assert_no_resources();assert!(!pic());
+ for _ in 0..20{
+  key(true);let t=texture() as *mut sys::imgui::ImTextureData;
+  assert_eq!(LIVE_PIXEL_BYTES.load(Ordering::Relaxed),generated_kbm::TEX_W*generated_kbm::TEX_H*4);
+  assert!(!pic());backend_frame();key(true);assert!(pic());assert_eq!(texture(),t as usize);
+  key(false);assert_eq!(unsafe{(*t).Status},S::WantDestroy);assert!(!pic());
+  for _ in 0..4{backend_frame();key(false);}assert_no_resources();
+ }
+ // Every picture name resolves to a cell inside the atlas
+ for(name,cell)in generated_kbm::NAMES.iter(){assert_eq!(generated_kbm::find(name),Some(*cell as usize));assert!((*cell as usize/generated_kbm::COLUMNS+1)*(generated_kbm::CELL+2)<=generated_kbm::TEX_H);}
 }
 fn check_icon_lifetime(){
  use sys::imgui::ImTextureStatus as S;

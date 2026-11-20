@@ -114,11 +114,10 @@ py -3.10 -X utf8 tools/package_native.py --variant low-memory
 
 `src`, `.cargo`, `link`, `conf`, `assets/native`, and `tools` contain the files required to build, test, and package the native mod. Keep `Cargo.lock`, the generated Rust data, and the native resources alongside them.
 
-## Sources and credits
+## Credits
 
-The body part diagrams and hitzone/material data come from the [MHXX Dex web port](https://mhxx-dex.pages.dev/), based on Ping’s MHXX Dex.
+Thanks to **Ping** (original MHXX Dex), **fabric_soul** (MHXX Dex web port) and the contributors credited by the web port: breakds, 掌机迷, MHVuze, svanheulen, ACG汉化组, dasding and team, 팀 갈무리, Zeff and team. Sources and their terms are listed in `THIRD_PARTY_NOTICES.md`.
 
-- **Ping** — original MHXX Dex
-- **fabric_soul** — MHXX Dex web port
-- Contributors credited by the web port: breakds, 掌机迷, MHVuze, svanheulen, ACG汉化组, dasding and team, 팀 갈무리, Zeff and team. This list does not establish authorship of each individual diagram.
-- **mhgu-forge / forge-rs** — Fexty, MIT License
+## License
+
+MIT License. See `LICENSE`, and `THIRD_PARTY_NOTICES.md` for third-party components and game data.

@@ -153,6 +153,16 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
 #[test]fn unknown_numeric_values_keep_legacy_fallback(){assert_eq!(numeric::number(12345.125),numeric::format_number(12345.125));assert_eq!(numeric::percent(12345),numeric::format_percent(12345));assert_eq!(numeric::percent(-1),"—");assert_eq!(numeric::percent(-2),"…");}
 #[test]fn failed_diagram_attempts_stop_and_can_be_reset(){let mut gate=retry::RetryGate::NEW;gate.select(41);let mut attempts=0;for _ in 0..3000{if gate.allows(){attempts+=1;gate.failed();}gate.tick(1./60.,true);}assert_eq!(attempts,3);assert!(!gate.allows());gate.select(45);assert!(gate.allows());gate.failed();assert!(!gate.allows());gate.tick(4.,true);assert!(!gate.allows());gate.tick(1.1,true);assert!(gate.allows());gate.failed();gate.succeeded();assert!(gate.allows());gate.failed();gate.tick(0.,false);gate.select(45);assert!(gate.allows());}
 
+// Reported in game: Gypceros takes pitfall traps but not shock traps (DB Trap_ID 2 = shock, 3 = pitfall).
+#[test]fn trap_rows_are_flash_pitfall_shock_with_known_immunities(){
+ let rows=|id:usize|{let m=&generated::MONSTERS[id];&generated::TRAPS[m.trap as usize..(m.trap+m.trap_len) as usize]};
+ let(pit,shock)=(rows(98)[1].name,rows(98)[2].name);assert_ne!(pit,shock);
+ for id in 37..130{let r=rows(id);if r.len()>=3{assert_eq!((r[1].name,r[2].name),(pit,shock),"monster {id}");}}
+ let g=rows(50);assert_eq!(g[1].values[0],1.);assert_ne!(g[2].values[0],1.); // Gypceros
+ let n=rows(77);assert_ne!(n[1].values[0],1.);assert_eq!(n[2].values[0],1.); // Nibelsnarf
+ // Stonefist Hermitaur pitfall: trapped only while enraged, 8 s (reviewed override of the DB's 12 / 2.5 / 25; not measured yet)
+ assert_eq!(rows(72)[1].values[..4],[1.,-1.,8.,-1.]);assert_eq!(rows(71)[1].values[..4],[1.,12.,12.,25.]);
+}
 #[test]fn neset_parts_use_reviewed_rings_and_separate_picture(){let m=&generated::MONSTERS[39];for row in &generated::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize]{if row.part>=8{assert!(row.ring_len>0);assert!(!row.pending);}}assert!(generated::DIAGRAM_SOURCES[130].0>0);}
 
 
@@ -160,3 +170,64 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
 #[path="../src/hook_guard.rs"]mod hook_guard;
 
 #[path="../src/button_prompts.rs"]mod button_prompts;
+
+#[path="../src/mouse.rs"]mod mouse;
+#[test]fn mouse_maps_into_the_picture_and_hud(){
+ use mouse::to_display;
+ let close=|a:(f32,f32),b:(f32,f32)|(a.0-b.0).abs()<0.01&&(a.1-b.1).abs()<0.01;
+ // 16:9 window, 16:9 picture: plain scaling
+ let v=View{w:1920.,h:1080.,hud:Some((1920,1080,1280))};assert!(close(to_display(640.,360.,v),(960.,540.)));assert!(close(to_display(0.,0.,v),(0.,0.)));
+ // 16:10 forced in a 16:9 window: picture 1728x1080 centered, bars of 96 px
+ let v=View{w:1920.,h:1080.,hud:Some((1728,1080,1280))};assert!(close(to_display(0.,0.,v),(96.,0.)));assert!(close(to_display(1280.,720.,v),(1824.,1080.)));
+ // 21:9 picture with a 16:9 HUD: x covers the HUD's middle part only
+ let v=View{w:2560.,h:1080.,hud:Some((2560,1080,1280))};assert!(close(to_display(0.,360.,v),(320.,540.)));assert!(close(to_display(1280.,360.,v),(2240.,540.)));
+ // Without renderer data: the whole window
+ let v=View{w:1280.,h:800.,hud:None};assert!(close(to_display(1280.,720.,v),(1280.,800.)));
+}
+#[test]fn mouse_hit_prefers_the_last_drawn_target(){
+ let t=[([0.,0.,100.,100.],Target::Panel),([10.,10.,50.,50.],Target::Tab(1)),([20.,20.,30.,30.],Target::RankItem(2))];
+ assert_eq!(mouse::hit(&t,25.,25.),Some(Target::RankItem(2)));assert_eq!(mouse::hit(&t,12.,12.),Some(Target::Tab(1)));assert_eq!(mouse::hit(&t,90.,90.),Some(Target::Panel));assert_eq!(mouse::hit(&t,100.,5.),None);
+}
+#[test]fn wheel_moves_rows_while_selected_and_scrolls_the_detail(){
+ use model::{SCROLL_UP,SCROLL_DOWN,UP,DOWN};use mouse::wheel_events as w;
+ assert_eq!(w(SCROLL_DOWN,1,Some(Target::Row(3))),DOWN);assert_eq!(w(SCROLL_UP,1,None),UP);assert_eq!(w(SCROLL_UP,1,Some(Target::Panel)),UP);
+ assert_eq!(w(SCROLL_DOWN,1,Some(Target::Detail)),SCROLL_DOWN);
+ for mode in [2,3]{assert_eq!(w(SCROLL_UP,mode,Some(Target::Detail)),UP);}
+ assert_eq!(w(SCROLL_DOWN,0,Some(Target::Row(0))),SCROLL_DOWN);assert_eq!(w(0,1,None),0);
+ // Through the model: a selected material moves to the next row
+ let mut s=State::new();s.select(48,34,3);s.progress.valid=true;s.tab=3;s.recompute(true);
+ if s.rows()>1{s.click(Target::Row(0));s.action(w(SCROLL_DOWN,s.mode,Some(Target::Row(0))));assert_eq!((s.mode,s.row),(1,1));}
+ assert!(mouse::hoverable(Target::Row(0))&&mouse::hoverable(Target::Tab(1))&&!mouse::hoverable(Target::Panel)&&!mouse::hoverable(Target::Detail));
+}
+#[test]fn scrollbar_drag_follows_the_pointer_and_keeps_the_row_visible(){
+ use mouse::scroll_offset as o;
+ assert_eq!(o(0.,100.,372.,20,8),0);assert_eq!(o(1000.,100.,372.,20,8),12);assert_eq!(o(236.,100.,372.,20,8),6);assert_eq!(o(200.,100.,372.,5,8),0);
+ let mut s=State::new();s.select(48,34,3);s.progress.valid=true;s.tab=0;s.recompute(true);
+ let rows=s.rows();if rows>8{s.scroll_to(99);assert_eq!(s.scroll,rows-8);assert_eq!(s.row,rows-8);s.row=rows-1;s.scroll_to(0);assert_eq!((s.scroll,s.row),(0,7));}
+ assert!(!mouse::hoverable(Target::Scrollbar));
+}
+#[test]fn mouse_click_waits_for_release_after_opening(){
+ let mut a=mouse::Arm::NEW;assert!(!a.step(true,1,1));assert!(!a.step(true,1,0));assert!(!a.step(true,0,0));assert!(a.step(true,1,1));
+ assert!(!a.step(false,0,0));assert!(!a.step(true,1,1));
+}
+#[test]fn mouse_clicks_drive_tabs_rows_lists_and_back(){
+ let mut s=State::new();s.progress=high();s.recompute(true);
+ assert!(!s.click(Target::Tab(3)));assert_eq!((s.tab,s.mode),(3,0));
+ assert!(!s.click(Target::Prev));assert_eq!(s.tab,2);assert!(!s.click(Target::Next));assert_eq!(s.tab,3);
+ let rows=s.rows();assert!(rows>2);assert!(!s.click(Target::Row(2)));assert_eq!((s.mode,s.row),(1,2));
+ assert!(!s.click(Target::Row(rows)));assert_eq!(s.row,2);
+ // The back bar: ours while a row is selected, the game's in mode 0
+ assert!(!s.click(Target::Back));assert_eq!(s.mode,0);assert!(s.click(Target::Back));assert_eq!(s.mode,0);
+ // A tab click while a row is selected leaves the table
+ s.click(Target::Row(1));assert_eq!(s.mode,1);s.click(Target::Tab(0));assert_eq!((s.tab,s.mode),(0,0));
+ s.tab=3;s.recompute(true);
+ if s.ranks.len()>1{
+  s.click(Target::RankOpen);assert_eq!(s.mode,2);let pick=s.ranks[0];s.click(Target::RankItem(0));assert_eq!((s.mode,s.rank),(0,pick));
+  s.click(Target::RankOpen);s.click(Target::Panel);assert_eq!(s.mode,0);
+  // A click elsewhere on the page only closes the open list
+  s.click(Target::RankOpen);s.click(Target::Tab(1));assert_eq!((s.mode,s.tab),(0,3));
+ }
+ // Read-only tabs have no selectable rows
+ s.click(Target::Tab(1));s.click(Target::Row(0));assert_eq!(s.mode,0);
+ s.click(Target::Tab(0));s.click(Target::Enter);assert_eq!(s.mode,1);
+}

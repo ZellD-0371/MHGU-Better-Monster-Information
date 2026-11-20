@@ -1,7 +1,7 @@
 use alloc::{vec::Vec,ffi::CString};
 use core::ffi::CStr;
 use forge::{imgui::DrawList,sys::imgui::{self as sys,ImVec2,ImTextureRef}};
-use crate::generated as g;
+use crate::{generated as g,generated_kbm as k};
 static mut ICONS:Option<(*mut sys::ImTextureData,ImTextureRef)>=None;
 static mut ICON_LIFETIME:crate::diagram_lifetime::Lifetime=crate::diagram_lifetime::Lifetime::NEW;
 static mut ICON_RETRY:crate::retry::RetryGate=crate::retry::RetryGate::NEW;
@@ -64,19 +64,38 @@ pub fn maintain_diagram(notes_open:bool){unsafe{
   }
  }
 }}
-pub fn maintain_icons(notes_open:bool,dt:f32){unsafe{
- let lifetime=&mut*core::ptr::addr_of_mut!(ICON_LIFETIME);
- if retire_texture(ICONS.map(|(tex,_)|tex),lifetime,notes_open){
-  if let Some((tex,_))=core::ptr::addr_of_mut!(ICONS).replace(None){
-   free_texture(tex);crate::diagnostic_info!("[monster-info] icon atlas released after notes closed");
+type Atlas=Option<(*mut sys::ImTextureData,ImTextureRef)>;
+// Load an atlas while the notes are open; release it after the GPU retires it once they close.
+unsafe fn maintain_atlas(slot:*mut Atlas,lifetime:*mut crate::diagram_lifetime::Lifetime,retry:*mut crate::retry::RetryGate,open:bool,dt:f32,path:&CStr,w:u16,h:u16,what:&str){unsafe{
+ let lifetime=&mut*lifetime;
+ if retire_texture((*slot).map(|(tex,_)|tex),lifetime,open){
+  if let Some((tex,_))=slot.replace(None){
+   free_texture(tex);crate::diagnostic_info!("[monster-info] {} released after notes closed",what);
   }
  }
- let retry=&mut*core::ptr::addr_of_mut!(ICON_RETRY);retry.tick(dt,notes_open);
- if !notes_open||lifetime.retiring()||core::ptr::addr_of!(ICONS).read().is_some(){return}
+ let retry=&mut*retry;retry.tick(dt,open);
+ if !open||lifetime.retiring()||slot.read().is_some(){return}
  retry.select(0);if !retry.allows(){return}
- if let Some(texture)=texture(c"app:/nativeNX/plugins/better-monster-information/monster-icons.rgba",2048,g::ATLAS_HEIGHT as u16){
-  ICONS=Some(texture);retry.succeeded();crate::diagnostic_info!("[monster-info] icon atlas loaded on demand");
- }else{retry.failed();forge::log::prelude::warn!("[monster-info] icon atlas load failed; retry limited");}
+ if let Some(texture)=texture(path,w,h){
+  *slot=Some(texture);retry.succeeded();crate::diagnostic_info!("[monster-info] {} loaded on demand",what);
+ }else{retry.failed();forge::log::prelude::warn!("[monster-info] {} load failed; retry limited",what);}
+}}
+pub fn maintain_icons(notes_open:bool,dt:f32){unsafe{
+ maintain_atlas(core::ptr::addr_of_mut!(ICONS),core::ptr::addr_of_mut!(ICON_LIFETIME),core::ptr::addr_of_mut!(ICON_RETRY),notes_open,dt,c"app:/nativeNX/plugins/better-monster-information/monster-icons.rgba",2048,g::ATLAS_HEIGHT as u16,"icon atlas");
+}}
+static mut KBM:Atlas=None;
+static mut KBM_LIFETIME:crate::diagram_lifetime::Lifetime=crate::diagram_lifetime::Lifetime::NEW;
+static mut KBM_RETRY:crate::retry::RetryGate=crate::retry::RetryGate::NEW;
+// Keyboard / mouse prompt pictures: only Recomp shows key prompts, so callers pass open=false elsewhere.
+pub fn maintain_kbm(open:bool,dt:f32){unsafe{
+ maintain_atlas(core::ptr::addr_of_mut!(KBM),core::ptr::addr_of_mut!(KBM_LIFETIME),core::ptr::addr_of_mut!(KBM_RETRY),open,dt,c"app:/nativeNX/plugins/better-monster-information/kbm-icons.rgba",k::TEX_W as u16,k::TEX_H as u16,"key prompt atlas");
+}}
+/// Draw a key picture (generated_kbm cell). False when the atlas is not ready, so the caller shows text.
+pub fn kbm_icon(draw:DrawList,cell:usize,p1:ImVec2,p2:ImVec2,tint:u32)->bool{unsafe{
+ if (&*core::ptr::addr_of!(KBM_LIFETIME)).retiring(){return false}
+ let Some((tex,reference))=KBM else{return false};if (*tex).Status!=sys::ImTextureStatus::OK{return false}
+ let(x,y)=((1+cell%k::COLUMNS*(k::CELL+2)) as f32,(1+cell/k::COLUMNS*(k::CELL+2)) as f32);let(tw,th,c)=(k::TEX_W as f32,k::TEX_H as f32,k::CELL as f32);
+ draw.add_image(reference,p1,p2,ImVec2{x:x/tw,y:y/th},ImVec2{x:(x+c)/tw,y:(y+c)/th},tint);true
 }}
 // Per-phase change detection: diagnostics must not become per-frame output.
 static mut DIAGRAM_LOG_KEYS:[[usize;4];2]=[[usize::MAX;4];2];

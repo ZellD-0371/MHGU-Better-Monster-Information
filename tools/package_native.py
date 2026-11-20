@@ -12,15 +12,17 @@ def main():
     target.mkdir(parents=True,exist_ok=True)
     shutil.copy2(binary,target)
     assets=target/'better-monster-information';assets.mkdir(exist_ok=True)
-    for name in ['monster-icons.rgba']:
-        source=ROOT/('assets/native-low' if variant=='low-memory' and name=='monster-icons.rgba' else 'assets/native')/name
+    for name in ['monster-icons.rgba','kbm-icons.rgba']:
+        source=ROOT/('assets/native-low' if variant=='low-memory' else 'assets/native')/name
         shutil.copy2(source,assets/name)
     for obsolete in ['monster-text.bin','NotoSansCJKkr-Regular.otf']:(assets/obsolete).unlink(missing_ok=True)
     shutil.copytree(ROOT/'assets/languages',assets/'languages',dirs_exist_ok=True)
-    (assets/'NOTO_LICENSE.txt').unlink(missing_ok=True)
-    shutil.copy2(ROOT/'assets/NOTO_LICENSE.txt',assets/'OFL.md')
+    # License files next to the plugin: the mod's own, the third-party notices, and the full texts they refer to
+    for obsolete in ['OFL.md','CREDITS.md']:(assets/obsolete).unlink(missing_ok=True)
+    shutil.copy2(ROOT/'LICENSE',assets/'LICENSE.txt')
+    shutil.copy2(ROOT/'THIRD_PARTY_NOTICES.md',assets/'THIRD_PARTY_NOTICES.md')
+    shutil.copy2(ROOT/'assets/NOTO_LICENSE.txt',assets/'NOTO_LICENSE.txt')
     shutil.copy2(ROOT/'conf/FORGE_LICENSE.txt',assets/'FORGE_LICENSE.md')
-    shutil.copy2(ROOT/'CREDITS.md',assets/'CREDITS.md')
     shutil.copytree(ROOT/('assets/native-low' if variant=='low-memory' else 'assets/native')/'parts',assets/'parts',dirs_exist_ok=True)
     mod=target.parents[2]
     for name in ['README.txt','설치와 조작.txt','DISTRIBUTION_NOTICE.txt','THIRD_PARTY_NOTICES.txt','FORGE_LICENSE.txt']:
