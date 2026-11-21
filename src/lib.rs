@@ -1,8 +1,8 @@
 #![no_std]
 extern crate alloc;
-mod numeric;mod retry;mod diagram_lifetime;mod settings_labels;mod diagnostics;mod language;mod language_pack;mod native;mod data;
+mod numeric;mod retry;mod diagram_lifetime;mod settings_labels;mod part_info;mod diagnostics;mod language;mod language_pack;mod native;mod data;
 #[cfg(not(bmi_low_memory))]mod generated;
-#[cfg(bmi_low_memory)]#[path="generated_low.rs"]mod generated;mod generated_kbm;mod model;mod resources;mod controller;mod mouse;mod hook_guard;mod button_prompts;mod menu_input;mod ui;mod storage;mod layout;mod history;mod history_format;mod perf;
+#[cfg(bmi_low_memory)]#[path="generated_low.rs"]mod generated;mod generated_kbm;mod model;mod resources;mod controller;mod mouse;mod hook_guard;mod purplelib;mod button_prompts;mod menu_input;mod ui;mod storage;mod layout;mod history;mod history_format;mod perf;
 use core::{cell::UnsafeCell,ffi::c_void,sync::atomic::{AtomicBool,AtomicU32,Ordering}};
 use forge::log::prelude::error;
 static BASE:AtomicU32=AtomicU32::new(0);

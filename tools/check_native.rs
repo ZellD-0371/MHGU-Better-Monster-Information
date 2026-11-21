@@ -231,3 +231,12 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
  s.click(Target::Tab(1));s.click(Target::Row(0));assert_eq!(s.mode,0);
  s.click(Target::Tab(0));s.click(Target::Enter);assert_eq!(s.mode,1);
 }
+
+#[path="../src/part_info.rs"]mod part_info;
+#[test]fn reward_markers_are_positive_only_and_localized(){
+ for label in part_info::BREAK.iter().chain(part_info::SEVER.iter()){assert!(!label.is_empty());}
+ let r=&generated::MONSTERS[95];let rows=&generated::WEAK[r.weak as usize..(r.weak+r.weak_len) as usize];
+ assert_eq!(rows[0].capability,1);assert_eq!(rows[4].capability,2);assert_eq!(rows[3].capability,0);
+ assert_eq!(rows[0].stun,100);assert_eq!(rows[4].stun,0);
+ assert!(generated::WEAK.iter().all(|r|r.capability<=3));
+}

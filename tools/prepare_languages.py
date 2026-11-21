@@ -19,7 +19,8 @@ def build(check=False):
  for values in texts:
   for t in values:chars.update(ord(c) for c in t if ord(c)>=32)
  for p in (ROOT/'src').glob('*.rs'):
-  if p.name.startswith(('generated','language_assets','skin_generated')):continue
+  # purplelib.rs text is drawn by the game's font (Options > Mod Options), not ours
+  if p.name.startswith(('generated','language_assets','skin_generated','purplelib')):continue
   for literal in re.findall(r'"(?:[^"\\]|\\.)*"',p.read_text(encoding='utf-8')):
    try:t=json.loads(literal)
    except ValueError:continue

@@ -5,6 +5,7 @@ preview-settings.json
 /dist/
 *.nro
 *.zip
+AGENTS.md
 /preview/
 /research/
 /Preview.cmd
@@ -43,3 +44,5 @@ preview-settings.json
 !/tools/prepare_numbers.py
 
 !/tools/prepare_kbm_icons.py
+
+!/tools/Install.ps1

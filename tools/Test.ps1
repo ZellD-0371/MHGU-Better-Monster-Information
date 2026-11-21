@@ -2,6 +2,8 @@ param([ValidateSet('standard','low-memory')][string]$Variant='standard')
 $ErrorActionPreference='Stop'
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
+    py -3.10 -X utf8 tools/check_korean_terms.py
+    if ($LASTEXITCODE -ne 0) { throw 'Korean terminology check failed' }
     py -3.10 -X utf8 tools/prepare_languages.py --check
     if ($LASTEXITCODE -ne 0) { throw 'Language/font resources failed verification' }
     py -3.10 -X utf8 tools/prepare_numbers.py --check

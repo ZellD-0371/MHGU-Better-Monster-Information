@@ -36,7 +36,7 @@ def main():
  code=re.sub(r'DIAGRAM_TEX_H:usize=\d+','DIAGRAM_TEX_H:usize=256',code)
  (out/'parts-manifest.json').write_text(json.dumps({'filter':'Lanczos','canvas':[384,256],'files':files},indent=2),encoding='utf-8')
  (ROOT/'src/generated_low.rs').write_text(code,encoding='utf-8')
- assert len(packed)==240 and ah<=256
+ assert len(packed)==242 and ah<=256  # 240 + break / sever marks
  assert all(0<x and 0<y and x+w<=2048 and y+h<=ah for x,y,w,h in packed)
  print(f'Diagram files: {len(files)}; bytes: {sum(v["bytes"] for v in files.values())}')
  print(f'Low-memory atlas: 2048x{ah}, {2048*ah*4} bytes, {len(packed)} sprites')
