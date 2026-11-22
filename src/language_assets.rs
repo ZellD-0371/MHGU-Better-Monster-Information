@@ -11,4 +11,4 @@ pub const FILES:[(usize,u32);9]=[
 (175117,997074961),
 (177104,2099549844),
 ];
-pub const FONT:(usize,u32)=(1783892,3706412028);
+pub const FONT:(usize,u32)=(1784092,538698290);

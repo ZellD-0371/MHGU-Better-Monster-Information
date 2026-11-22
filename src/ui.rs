@@ -15,6 +15,8 @@ fn glyph(pixels:f32,ch:char)->Glyph{unsafe{
  if let Some(font)=FONT{let baked=sys::ImFont_GetFontBaked(font.raw(),pixels,1.);if !baked.is_null(){let value=sys::ImFontBaked_FindGlyph(baked,key.1);if !value.is_null(){g=Glyph{advance:(*value).AdvanceX,top:(*value).Y0,bottom:(*value).Y1};}}}
  if !crate::perf::legacy(){if cache.len()>=8192{cache.clear();}cache.insert(key,g);}g
 }}
+/// Hitzone table value columns (x, width)
+const VALUE_X:f32=560.;const VALUE_W:f32=36.;
 const INK:u32=0xff282a2b;const PAPER:u32=0xffc0dce7;const LINE:u32=0xff91a8b6;const GOLD:u32=0xff50d9f1;const WHITE:u32=0xffe8e9e1;
 mod skin { include!("skin_generated.rs"); }
 static PENDING_LANGUAGE:core::sync::atomic::AtomicU32=core::sync::atomic::AtomicU32::new(0);
@@ -136,6 +138,11 @@ impl Canvas{
  // Break / sever marks: 16-unit atlas pictures centred on cy (tools/export_ailment_hd_art.py)
  fn break_mark(&self,x:f32,cy:f32){self.icon(g::BREAK_MARK,x,cy-8.,16.,0xffffffff);}
  fn sever_mark(&self,x:f32,cy:f32){self.icon(g::SEVER_MARK,x,cy-8.,16.,0xffffffff);}
+ // Break count: a small digit centred on (cx, cy), at the mark's top right
+ fn count_badge(&self,cx:f32,cy:f32,n:u8){
+  // Size 13, centred just outside the mark's upper-right edge
+  let t=alloc::format!("{}",n.min(9));self.label(cx-6.5,cy-7.5,13.,15.,13.,INK,&t,true);
+ }
  fn cursor(&self,x:f32,y:f32,active:bool,clock:f32){let phase=(clock*2.2)%1.;let wobble=if active{(0.5-(phase-0.5).abs())*6.}else{0.};let x=x+wobble;
   self.draw.add_triangle_filled(self.p(x,y-10.),self.p(x+12.,y),self.p(x,y+10.),INK);
   self.draw.add_triangle_filled(self.p(x+2.,y-7.),self.p(x+9.,y),self.p(x+2.,y+7.),if active{GOLD}else{0xff8fa8bc});
@@ -187,11 +194,14 @@ fn weak_table(cv:&Canvas,s:&State){
  }}
  cv.rect(364.,179.,520.,37.,0xffb7cbd8);cv.border(364.,179.,520.,37.,LINE);
  for i in 0..3{let x=380.+i as f32*172.;cv.icon(g::ATTACKS[i],x,185.,25.,0xffffffff);cv.label(x+31.,179.,135.,37.,22.,INK,t(g::UI_DAMAGETYPES[i],s),false);}
- cv.rect(364.,226.,520.,37.,0xffa4b7c4);cv.label(368.,226.,146.,37.,20.,INK,t(g::UI_PART[0],s),true);
- for i in 0..9{cv.icon(if i<3{g::ATTACKS[i]}else if i<8{g::ELEMENTS[i-3]}else{g::STUN_ICON},518.+(366./9.)*i as f32+8.,233.,24.,0xffffffff);}
+ cv.rect(364.,226.,520.,37.,0xffa4b7c4);cv.label(368.,226.,188.,37.,20.,INK,t(g::UI_PART[0],s),true);
+ // Value columns: 9 x 36 units from x 560, leaving the part name about 140 units
+ for i in 0..9{cv.icon(if i<3{g::ATTACKS[i]}else if i<8{g::ELEMENTS[i-3]}else{g::STUN_ICON},VALUE_X+VALUE_W*i as f32+6.,233.,24.,0xffffffff);}
  // Mark slots for this monster: as many as its busiest row (0 for most small monsters), so all names line up
  let slots=g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().map(|r|r.capability.count_ones()).max().unwrap_or(0);
  let num_w=cv.measure(20.,"00");
+ // Room for the break count digit at a mark's top right
+ let multi=g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().any(|r|r.breaks>=2);
  for (visible,row) in g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().enumerate().skip(s.scroll).take(8){
   let y=268.+(visible-s.scroll) as f32*34.;let selected=visible==s.row;
   if selected{cv.rect(364.,y,520.,33.,if s.mode==1{0xff63cfe8}else{0xffaed0df});cv.cursor(348.,y+17.,s.mode==1,s.clock);}
@@ -201,18 +211,21 @@ fn weak_table(cv:&Canvas,s:&State){
   if !num.is_empty(){cv.right(372.,y,num_w,33.,20.,INK,num);}
   let slot=372.+num_w+5.;
   // Break in the first slot; sever in the second when the monster has a part with both, else the first
-  if row.capability&1!=0{cv.break_mark(slot,y+17.5);}if row.capability&2!=0{cv.sever_mark(if slots==2{slot+17.}else{slot},y+17.5);}
-  let mx=slot+slots as f32*17.+if slots>0{2.}else{0.};
-  let width=cv.measure(20.,text);let available=143.-(mx-372.);
+  // Parts that break more than once: a small count badge on the mark's corner (no extra width)
+  if row.capability&1!=0{cv.break_mark(slot,y+17.5);if row.breaks>=2{cv.count_badge(slot+15.,y+10.5,row.breaks);}}
+  if row.capability&2!=0{cv.sever_mark(if slots==2{slot+17.+if multi{5.}else{0.}}else{slot},y+17.5);}
+  let mx=slot+slots as f32*17.+if slots>0{2.}else{0.}+if multi{5.}else{0.};
+  let width=cv.measure(20.,text);let available=VALUE_X-6.-mx;
   if selected&&width>available&&s.clock>1.{let travel=(width-available)/30.;let elapsed=(s.clock-1.)%(travel+3.);let offset=if elapsed<travel{elapsed*30.}else if elapsed<travel+2.{width-available}else{0.};cv.raw_label(mx,y,available,33.,20.,INK,text,false,offset);}
   else{cv.label(mx,y,available,33.,20.,INK,text,false);}
-  for (i,value) in row.values.iter().copied().chain(core::iter::once(row.stun as f32)).enumerate(){cv.label(518.+i as f32*(366./9.),y,366./9.,33.,23.,INK,&number(value),true);}
+  for (i,value) in row.values.iter().copied().chain(core::iter::once(row.stun as f32)).enumerate(){cv.label(VALUE_X+i as f32*VALUE_W,y,VALUE_W,33.,22.,INK,&number(value),true);}
  }
  // One-line legend under the table, only for monsters with marks
  let rows=&g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize];let lang=s.language.min(8);
  let mut lx=372.;let ly=552.;
  if rows.iter().any(|r|r.capability&1!=0){cv.break_mark(lx,ly+12.5);let w=cv.measure(17.,crate::part_info::BREAK[lang]);cv.label(lx+19.,ly,w+2.,22.,17.,INK,crate::part_info::BREAK[lang],false);lx+=w+38.;}
- if rows.iter().any(|r|r.capability&2!=0){cv.sever_mark(lx,ly+12.5);let w=cv.measure(17.,crate::part_info::SEVER[lang]);cv.label(lx+19.,ly,w+2.,22.,17.,INK,crate::part_info::SEVER[lang],false);}
+ if rows.iter().any(|r|r.capability&2!=0){cv.sever_mark(lx,ly+12.5);let w=cv.measure(17.,crate::part_info::SEVER[lang]);cv.label(lx+19.,ly,w+2.,22.,17.,INK,crate::part_info::SEVER[lang],false);lx+=w+38.;}
+ if rows.iter().any(|r|r.breaks>=2){cv.break_mark(lx,ly+12.5);cv.count_badge(lx+15.,ly+5.5,2);let w=cv.measure(17.,crate::part_info::TIMES[lang]);cv.label(lx+25.,ly,w+2.,22.,17.,INK,crate::part_info::TIMES[lang],false);}
  cv.scrollbar(892.,268.,272.,s.rows(),s.scroll);
 }
 fn ordinary_table(cv:&Canvas,s:&State){

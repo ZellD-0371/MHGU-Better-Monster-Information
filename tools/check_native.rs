@@ -232,6 +232,14 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
  s.click(Target::Tab(0));s.click(Target::Enter);assert_eq!(s.mode,1);
 }
 
+// Player report 2026-11-22: Royal Ludroth mane, Najarala resonating organs (not body), Seregios legs, Nibelsnarf mouth
+#[test]fn reported_break_parts_are_marked(){
+ let bits=|id:usize,part:u8|{let m=&generated::MONSTERS[id];generated::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().filter(|r|r.part==part).fold(0,|a,r|a|r.capability)};
+ // Break counts from the game files (dtbparts): Rathalos wings left + right, Seregios legs left + right, Barroth claws once
+ let times=|id:usize,part:u8|{let m=&generated::MONSTERS[id];generated::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().filter(|r|r.part==part).map(|r|r.breaks).max().unwrap_or(0)};
+ assert_eq!(times(98,6),2);assert_eq!(times(106,7),2);assert_eq!(times(82,3),1);assert_eq!(times(98,1),1);
+ assert_eq!(bits(75,3)&1,1);assert_eq!(bits(81,4)&1,1);assert_eq!(bits(81,3)&1,0);assert_eq!(bits(106,6)&1,1);assert_eq!(bits(106,7)&1,1);assert_eq!(bits(77,8)&1,1);
+}
 #[path="../src/part_info.rs"]mod part_info;
 #[test]fn reward_markers_are_positive_only_and_localized(){
  for label in part_info::BREAK.iter().chain(part_info::SEVER.iter()){assert!(!label.is_empty());}
