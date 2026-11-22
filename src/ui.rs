@@ -232,7 +232,8 @@ fn ordinary_table(cv:&Canvas,s:&State){
  let m=&g::MONSTERS[s.id as usize];let rows=if s.tab==1{&g::AILMENTS[m.ail as usize..(m.ail+m.ail_len) as usize]}else{&g::TRAPS[m.trap as usize..(m.trap+m.trap_len) as usize]};
  let widths:&[f32]=if s.tab==1{&[162.,130.,115.,130.,160.,119.]}else{&[212.,160.,148.,148.,148.]};
  let headers:&[u32]=if s.tab==1{&[g::UI_TABS[1],g::UI_INITIAL[0],g::UI_INCREASE[0],g::UI_MAXIMUM[0],g::UI_DURATION[0],g::UI_DAMAGE[0]]}else{&[g::UI_TABS[2],g::UI_EFFECTIVE[0],g::UI_NORMAL[0],g::UI_ENRAGED[0],g::UI_FATIGUED[0]]};
- if s.tab==2{cv.label(564.,193.,320.,27.,18.,INK,t(g::UI_TIMEUNIT[0],s),false);}
+ // Time unit note: the size of the table's numbers (24), right-aligned to the Materials tab's right edge (76 + 3 x 196 + 184 = 848)
+ if s.tab==2{cv.right(68.,190.,780.,32.,24.,INK,t(g::UI_TIMEUNIT[0],s));}
  cv.rect(68.,226.,816.,37.,0xffa4b7c4);let mut x=68.;for(i,width)in widths.iter().enumerate(){let header=t(headers[i],s);cv.label(x+4.,226.,width-8.,37.,20.,INK,&header,true);x+=width;}
  for(i,row)in rows.iter().enumerate(){let y=268.+i as f32*34.;cv.line(68.,y+33.,884.,y+33.,LINE,1.);cv.icon(row.icon as usize,76.,y+6.,22.,0xffffffff);cv.label(102.,y,widths[0]-39.,33.,20.,INK,t(row.name,s),false);let mut x=68.+widths[0];
   for col in 1..widths.len(){if s.tab==2&&col==1{cv.label(x+4.,y,widths[col]-8.,33.,24.,INK,/* same O / X in every language */if row.values[0]>0.{"O"}else{"X"},true);}else{cv.label(x+4.,y,widths[col]-8.,33.,24.,INK,number(row.values[col-1]),true);}x+=widths[col];}
