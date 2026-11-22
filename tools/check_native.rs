@@ -241,6 +241,24 @@ fn high()->Progress{let mut p=Progress::EMPTY;p.valid=true;p.hr=2;p.hub=2;p.flag
  assert_eq!(bits(75,3)&1,1);assert_eq!(bits(81,4)&1,1);assert_eq!(bits(81,3)&1,0);assert_eq!(bits(106,6)&1,1);assert_eq!(bits(106,7)&1,1);assert_eq!(bits(77,8)&1,1);
 }
 #[path="../src/part_info.rs"]mod part_info;
+#[test]fn shared_break_and_tail_groups_cover_their_hitzones(){
+ let rows=|id:usize|{let m=&generated::MONSTERS[id];&generated::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize]};
+ for part in [10,12]{assert!(rows(39).iter().filter(|r|r.part==part).all(|r|r.capability&1!=0));}
+ let n=rows(40);assert_eq!(n[4].capability&1,1);assert_eq!(n[5].capability,0);
+ let a=rows(107);assert_eq!(a[11].capability,2);assert_eq!(a[12].capability,0);assert_eq!(a[13].capability,2);
+ assert_eq!(a[10].capability,2);assert_eq!(rows(108)[9].capability,2);
+ for r in rows(108).iter().filter(|r|r.part==7){assert_eq!(r.capability,2);}
+ let b=rows(88);assert_eq!(b[5].capability&2,2);assert_eq!(b[6].capability&2,2);
+ assert_eq!(b[5].description,b[6].description);
+ // One verified attack location stays exclusive (Rathian tail).
+ assert!(rows(95).iter().filter(|r|r.capability&2!=0).all(|r|r.part==5));
+}
+#[test]fn carveable_detached_heads_are_marked_without_marking_broken_states(){
+ let rows=|id:usize|{let m=&generated::MONSTERS[id];&generated::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize]};
+ let barroth=rows(82);assert_eq!(barroth[0].capability&1,1);assert_eq!(barroth[1].capability&1,1);
+ let crystalbeard=rows(86);assert_eq!(crystalbeard[0].capability&1,1);assert_eq!(crystalbeard[1].capability&1,0);
+ assert!(generated::WEAK.iter().all(|r|(r.description!=0)==(r.capability!=0)));
+}
 #[test]fn reward_markers_are_positive_only_and_localized(){
  for label in part_info::BREAK.iter().chain(part_info::SEVER.iter()){assert!(!label.is_empty());}
  let r=&generated::MONSTERS[95];let rows=&generated::WEAK[r.weak as usize..(r.weak+r.weak_len) as usize];

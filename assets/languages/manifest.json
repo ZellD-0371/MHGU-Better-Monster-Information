@@ -1,5 +1,5 @@
 {
-  "inputs_sha256": "1a8721e89c74d6625b45e428f8f22511c511cd6cea1aac1a4dfed4b659e7dd24",
+  "inputs_sha256": "62a6fb4ca71c76062bc924644f279d40593132e4890746888a683cdf435bbf87",
   "codes": [
     "en",
     "zh-Hans",
@@ -11,49 +11,49 @@
     "it",
     "es"
   ],
-  "count": 4695,
-  "characters": 3928,
+  "count": 4710,
+  "characters": 3932,
   "original_font_bytes": 16433112,
   "files": {
     "text.en.bin": {
-      "bytes": 173891,
-      "crc32": 3145590177
+      "bytes": 174729,
+      "crc32": 1047264321
     },
     "text.zh-Hans.bin": {
-      "bytes": 203961,
-      "crc32": 2499424777
+      "bytes": 204746,
+      "crc32": 3458956251
     },
     "text.zh-Hant.bin": {
-      "bytes": 193947,
-      "crc32": 3393589440
+      "bytes": 194732,
+      "crc32": 2156886010
     },
     "text.ja.bin": {
-      "bytes": 183933,
-      "crc32": 3999645090
+      "bytes": 184974,
+      "crc32": 2033173801
     },
     "text.ko.bin": {
-      "bytes": 226608,
-      "crc32": 705982121
+      "bytes": 227866,
+      "crc32": 390512348
     },
     "text.de.bin": {
-      "bytes": 176225,
-      "crc32": 3284617764
+      "bytes": 177254,
+      "crc32": 306409143
     },
     "text.fr.bin": {
-      "bytes": 175527,
-      "crc32": 1205251549
+      "bytes": 176594,
+      "crc32": 876457699
     },
     "text.it.bin": {
-      "bytes": 175117,
-      "crc32": 997074961
+      "bytes": 176137,
+      "crc32": 3269388386
     },
     "text.es.bin": {
-      "bytes": 177104,
-      "crc32": 2099549844
+      "bytes": 178090,
+      "crc32": 2449923962
     },
     "font.shared.otf": {
-      "bytes": 1784092,
-      "crc32": 538698290
+      "bytes": 1785204,
+      "crc32": 1656490332
     }
   }
 }

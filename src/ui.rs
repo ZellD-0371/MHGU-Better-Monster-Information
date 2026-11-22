@@ -138,11 +138,6 @@ impl Canvas{
  // Break / sever marks: 16-unit atlas pictures centred on cy (tools/export_ailment_hd_art.py)
  fn break_mark(&self,x:f32,cy:f32){self.icon(g::BREAK_MARK,x,cy-8.,16.,0xffffffff);}
  fn sever_mark(&self,x:f32,cy:f32){self.icon(g::SEVER_MARK,x,cy-8.,16.,0xffffffff);}
- // Break count: a small digit centred on (cx, cy), at the mark's top right
- fn count_badge(&self,cx:f32,cy:f32,n:u8){
-  // Size 13, centred just outside the mark's upper-right edge
-  let t=alloc::format!("{}",n.min(9));self.label(cx-6.5,cy-7.5,13.,15.,13.,INK,&t,true);
- }
  fn cursor(&self,x:f32,y:f32,active:bool,clock:f32){let phase=(clock*2.2)%1.;let wobble=if active{(0.5-(phase-0.5).abs())*6.}else{0.};let x=x+wobble;
   self.draw.add_triangle_filled(self.p(x,y-10.),self.p(x+12.,y),self.p(x,y+10.),INK);
   self.draw.add_triangle_filled(self.p(x+2.,y-7.),self.p(x+9.,y),self.p(x+2.,y+7.),if active{GOLD}else{0xff8fa8bc});
@@ -200,8 +195,6 @@ fn weak_table(cv:&Canvas,s:&State){
  // Mark slots for this monster: as many as its busiest row (0 for most small monsters), so all names line up
  let slots=g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().map(|r|r.capability.count_ones()).max().unwrap_or(0);
  let num_w=cv.measure(20.,"00");
- // Room for the break count digit at a mark's top right
- let multi=g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().any(|r|r.breaks>=2);
  for (visible,row) in g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize].iter().enumerate().skip(s.scroll).take(8){
   let y=268.+(visible-s.scroll) as f32*34.;let selected=visible==s.row;
   if selected{cv.rect(364.,y,520.,33.,if s.mode==1{0xff63cfe8}else{0xffaed0df});cv.cursor(348.,y+17.,s.mode==1,s.clock);}
@@ -211,10 +204,9 @@ fn weak_table(cv:&Canvas,s:&State){
   if !num.is_empty(){cv.right(372.,y,num_w,33.,20.,INK,num);}
   let slot=372.+num_w+5.;
   // Break in the first slot; sever in the second when the monster has a part with both, else the first
-  // Parts that break more than once: a small count badge on the mark's corner (no extra width)
-  if row.capability&1!=0{cv.break_mark(slot,y+17.5);if row.breaks>=2{cv.count_badge(slot+15.,y+10.5,row.breaks);}}
-  if row.capability&2!=0{cv.sever_mark(if slots==2{slot+17.+if multi{5.}else{0.}}else{slot},y+17.5);}
-  let mx=slot+slots as f32*17.+if slots>0{2.}else{0.}+if multi{5.}else{0.};
+  if row.capability&1!=0{cv.break_mark(slot,y+17.5);}
+  if row.capability&2!=0{cv.sever_mark(if slots==2{slot+17.}else{slot},y+17.5);}
+  let mx=slot+slots as f32*17.+if slots>0{2.}else{0.};
   let width=cv.measure(20.,text);let available=VALUE_X-6.-mx;
   if selected&&width>available&&s.clock>1.{let travel=(width-available)/30.;let elapsed=(s.clock-1.)%(travel+3.);let offset=if elapsed<travel{elapsed*30.}else if elapsed<travel+2.{width-available}else{0.};cv.raw_label(mx,y,available,33.,20.,INK,text,false,offset);}
   else{cv.label(mx,y,available,33.,20.,INK,text,false);}
@@ -222,10 +214,22 @@ fn weak_table(cv:&Canvas,s:&State){
  }
  // One-line legend under the table, only for monsters with marks
  let rows=&g::WEAK[m.weak as usize..(m.weak+m.weak_len) as usize];let lang=s.language.min(8);
- let mut lx=372.;let ly=552.;
+ let mut lx=372.;let ly=542.;
  if rows.iter().any(|r|r.capability&1!=0){cv.break_mark(lx,ly+12.5);let w=cv.measure(17.,crate::part_info::BREAK[lang]);cv.label(lx+19.,ly,w+2.,22.,17.,INK,crate::part_info::BREAK[lang],false);lx+=w+38.;}
  if rows.iter().any(|r|r.capability&2!=0){cv.sever_mark(lx,ly+12.5);let w=cv.measure(17.,crate::part_info::SEVER[lang]);cv.label(lx+19.,ly,w+2.,22.,17.,INK,crate::part_info::SEVER[lang],false);lx+=w+38.;}
- if rows.iter().any(|r|r.breaks>=2){cv.break_mark(lx,ly+12.5);cv.count_badge(lx+15.,ly+5.5,2);let w=cv.measure(17.,crate::part_info::TIMES[lang]);cv.label(lx+25.,ly,w+2.,22.,17.,INK,crate::part_info::TIMES[lang],false);}
+ if s.mode==1{if let Some(row)=row.filter(|r|r.capability!=0&&r.description!=0){
+  // Centre the help panel between the legend's line box and the inner frame.
+  let panel_y=(ly+22.+649.-70.)*0.5;
+  cv.rect(364.,panel_y,520.,70.,0xffacd0de);
+  let heading=crate::part_info::SELECTED[lang];let w=cv.measure(13.,heading)+5.;
+  cv.label(378.,panel_y+2.,w,20.,13.,0xff4f6777,heading,false);
+  cv.label(378.+w,panel_y+2.,9.,20.,13.,0xff4f6777,":",false);
+  let name=t(row.name,s);let name=name.split(" · ").next().unwrap_or(&name);
+  cv.label(387.+w,panel_y+2.,483.-w,20.,13.,0xff4f6777,name,false);
+  let prose=t(row.description,s);let n=prose.lines().count().min(2);
+  let top=panel_y+24.+(44.-n as f32*22.)*0.5;
+  for(i,line)in prose.lines().take(2).enumerate(){cv.label(378.,top+i as f32*22.,492.,22.,19.,INK,line,false);}
+ }}
  cv.scrollbar(892.,268.,272.,s.rows(),s.scroll);
 }
 fn ordinary_table(cv:&Canvas,s:&State){
